@@ -338,13 +338,18 @@ export class SVG extends SVG3d {
     return ['<?xml version="1.0" encoding="utf-8"?>', text.replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" ')].join("\n");
   }
 
-  /** Converts the current document to a `data:image/svg+xml` URI (browser-specific encoding). */
+  /** Converts the current document to a `data:image/svg+xml` URI. */
   toDataURI(): string {
-    let xml = this.toXML();
-
-    if (browser.mozilla || browser.msie) {
-      xml = encodeURIComponent(xml);
-    }
+    // Originally only ran `encodeURIComponent` for `browser.mozilla`/`browser.msie` - never for
+    // Chrome/Chromium/Safari (the large majority of real usage today). A real Chromium render
+    // (jui-vue.io's gallery/gps demo's map.minimap widget) surfaced why that's a genuine bug, not
+    // a faithfully-preserved original behavior: any SVG using `url(#someId)` (any gradient/
+    // clipPath reference) contains an unescaped `#`, which a data URI reads as its fragment
+    // delimiter - everything after it is silently dropped, producing a corrupt SVG payload that
+    // fails to render at all (a plainly visible "broken image" glyph, not a subtle glitch).
+    // `encodeURIComponent` is safe to apply unconditionally - a correctly percent-encoded data URI
+    // works identically in every browser, so there's no real browser-specific behavior to keep.
+    const xml = encodeURIComponent(this.toXML());
 
     if (browser.msie) {
       return "data:image/svg+xml," + xml;

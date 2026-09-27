@@ -187,6 +187,26 @@ describe("SVG", () => {
             const uri = svg.toDataURI();
             expect(uri.startsWith("data:image/svg+xml")).toBe(true);
         });
+
+        it("percent-encodes the XML so an unescaped '#' (e.g. from url(#gradient-id)) can't truncate the URI at a fragment boundary", () => {
+            // Real bug, found via a real Chromium render (jui-vue.io's gallery/gps demo's
+            // map.minimap widget - the ONLY thing anywhere in this whole project that calls
+            // toDataURI() with real content): the original only ran `encodeURIComponent` for
+            // `browser.mozilla`/`browser.msie`, never for Chrome/Chromium/Safari (the large
+            // majority of real usage today) - an unescaped `#` in the XML (any element using
+            // `fill="url(#someId)"`, which any SVG with a gradient/clipPath reference does) gets
+            // read as the URI's fragment delimiter, silently truncating everything after it - the
+            // resulting data URI's SVG payload is corrupt/incomplete and fails to render at all
+            // (a real, plainly visible "broken image" glyph in the browser, not a subtle glitch).
+            const svg = new SVG(container);
+            svg.rect({ fill: "url(#some-gradient-id)" });
+            svg.render();
+
+            const uri = svg.toDataURI();
+            const payload = uri.slice(uri.indexOf(",") + 1);
+            expect(payload).not.toContain("#");
+            expect(decodeURIComponent(payload)).toContain("url(#some-gradient-id)");
+        });
     });
 
     describe("getTextSize()", () => {
