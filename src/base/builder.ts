@@ -675,8 +675,20 @@ export class Builder extends Core<BuilderOptions> {
 
     if (typeCheck("integer", padding)) {
       this._padding = { left: padding as number, right: padding as number, bottom: padding as number, top: padding as number };
-    } else {
+    } else if (typeCheck("object", padding)) {
       this._padding = padding as Padding;
+    } else {
+      // BUGFIX (genuine engine gap, not a preserved quirk): the original has no real special-case
+      // for non-object/non-integer `padding` values (e.g. the legacy magic string `"empty"`, used
+      // by several real site demos - `mini_bar`/`mini_column`/`mini_line`/`fill_custom_gauge` -
+      // clearly intending "no padding"). It relies entirely on `padding.left || 0`-style reads
+      // elsewhere treating a missing property as 0 - but `calculate()` below does `this._padding.left
+      // + this._padding.right` (a real addition, not `||`'d), which is `undefined + undefined =
+      // NaN` for any non-object value, not 0 - propagating into `<rect width="NaN">` and a hard
+      // console error. Node/hand-verified this NaN happens in the real shipped `chart.min.js` too
+      // (identical `x.left+x.right` pattern) - so "empty" never actually worked there either; this
+      // normalizes any such value to explicit zero padding, the only sensible reading of "empty".
+      this._padding = { left: 0, right: 0, bottom: 0, top: 0 };
     }
 
     if (!typeCheck("array", this._options.axis)) {
