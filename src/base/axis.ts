@@ -880,8 +880,15 @@ export class Axis {
     if (typeCheck("integer", options.padding)) {
       const p = options.padding as number;
       this._padding = { left: p, right: p, bottom: p, top: p };
-    } else {
+    } else if (typeCheck("object", options.padding)) {
       this._padding = options.padding as AxisPadding;
+    } else {
+      // BUGFIX (genuine engine gap, not a preserved quirk) - see `base/builder.ts`'s
+      // `setDefaultOptions()` for the full explanation: a non-object/non-integer `padding` (e.g.
+      // the legacy magic string `"empty"`) must normalize to explicit zero padding, not fall
+      // through to `drawAxisBackground()`'s `this._padding.left + this._padding.right` producing
+      // NaN (`undefined + undefined`) and a `<rect width="NaN">` console error.
+      this._padding = { left: 0, right: 0, bottom: 0, top: 0 };
     }
 
     this._area = this.calculatePanel(
