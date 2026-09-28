@@ -150,6 +150,12 @@ export class PolygonCoreBrush extends CoreBrush {
     return undefined;
   }
 
+  /**
+   * @method setup
+   * 1:1 port of `PolygonCoreBrush.setup()`'s static defaults factory: `{ id: null, clip: false }` -
+   * see header comment for why `clip` diverges from `CoreBrush.setup()`'s own `true` default and
+   * why `id` is additive over it.
+   */
   static setup(): PolygonBrushOptions {
     return {
       /** @cfg {String} [id=null] */

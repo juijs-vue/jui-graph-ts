@@ -309,9 +309,15 @@ export class Map {
   // Wired externally by whatever assembles the chart (mirrors `axis.js`'s post-`new` assignment -
   // see header comment), NOT by this constructor. Definite-assignment, same idiom as
   // `util/svg/element.ts`'s `Element` fields.
+  /** The owning chart, assigned externally (post-`new`) by whatever wires this map up - never set
+   *  by this constructor. See header comment's "constructor arity is a red herring" note. */
   chart!: MapChart;
+  /** The `Axis` this map is attached to, assigned externally alongside `chart`. */
   axis!: Axis;
+  /** This map's resolved options (`axis[k]` from `Axis.reload()`'s `drawMapType()` call), assigned
+   *  externally alongside `chart`. */
   map!: MapOptions;
+  /** The chart's shared `SVG` builder, assigned externally alongside `chart`. */
   svg!: SVG;
 
   private pathData: Record<string, MapPathDatum[]> = {};
@@ -321,6 +327,9 @@ export class Map {
   private pathX = 0;
   private pathY = 0;
 
+  /** The callable pan/zoom/lookup object built by `buildScale()` in the constructor - see
+   *  `MapScale`'s own doc comment for its shape and the `this`-binding subtlety its `each`/`scale`/
+   *  `view` sibling methods rely on. */
   scale: MapScale;
 
   constructor() {

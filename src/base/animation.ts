@@ -59,7 +59,16 @@
 import { Builder, type BuilderOptions } from "./builder";
 import { find } from "../util/dom";
 
+/**
+ * Options accepted by `Animation`'s constructor - merged (fill-only, via `extend(..., true)`)
+ * against `Animation.setup()`'s own defaults, which in turn merge in `Builder.setup()`'s entire
+ * default set (an `Animation` instance's options are really "one `Builder`'s options, plus
+ * `interval`"). `axis` must resolve to at most a single axis config (see `init()`) - the real-time
+ * module only ever drives one axis.
+ */
 export interface AnimationOptions {
+  /** Minimum milliseconds between re-renders; `0` (the default) re-renders on every animation
+   *  frame with no throttling. Consumed and deleted by `init()` before the options reach `Builder`. */
   interval?: number;
   axis?: any[];
   [key: string]: any;
@@ -131,8 +140,22 @@ function resolveBuilderTarget(
   return list;
 }
 
+/**
+ * Port of `chart.animation`'s `Animation` constructor function as a real ES class. A
+ * `requestAnimationFrame`-polling wrapper around a single `Builder`-mounted chart: `init()` mounts
+ * the chart, `run()` starts an RAF loop that re-renders it every frame (throttled by `interval`)
+ * and tracks a rolling frames-per-second estimate (`tpf`/`fps`, stashed onto the `Builder`'s own
+ * cache via `setCache()` so any brush/widget can read it back via `getCache("tpf"/"fps")`).
+ * `stop()` cancels the loop; `set()`/`update()` forward to the underlying chart's single axis.
+ * See header comment for the real, already-broken-in-the-original edge cases this class reproduces
+ * when `selector` matches zero or more than one DOM element.
+ */
 export class Animation {
+  /** The selector (or element) `init()` resolves to the chart's mount point, via
+   *  `resolveBuilderTarget()`. */
   selector: string | Element;
+  /** This instance's options, merged (fill-only) against `Animation.setup()`'s defaults in the
+   *  constructor. */
   options: AnimationOptions;
 
   /** See header comment: intended shape is a single `Builder`, but a selector matching zero or
@@ -152,6 +175,13 @@ export class Animation {
     this.options = extend(options || {}, Animation.setup(), true) as AnimationOptions;
   }
 
+  /**
+   * @method init
+   * Consumes `options.interval` (deleted from the options object before it reaches `Builder`,
+   * since `Builder` itself has no `interval` option), rejects a config with more than one `axis`
+   * entry (the real-time module only ever drives a single axis), and mounts the chart via
+   * `resolveBuilderTarget()`.
+   */
   init(): void {
     const opts = this.options;
 
@@ -167,6 +197,16 @@ export class Animation {
     this.builder = resolveBuilderTarget(this.selector, opts) as unknown as Builder;
   }
 
+  /**
+   * @method run
+   * Starts (or continues) the RAF-driven render loop: on each frame where at least `interval`
+   * milliseconds have passed since the previous one (or unconditionally, when `interval === 0`),
+   * computes the elapsed-seconds-per-frame (`tpf`, clamped to a maximum of `1` so a long pause -
+   * e.g. a backgrounded tab - doesn't report a huge/misleading value), stashes `tpf`/`fps` onto the
+   * chart via `setCache()`, invokes `callback` (bound to `this`, with milliseconds elapsed since
+   * `run()` was first called), re-renders via `render()`, then re-schedules itself via
+   * `requestAnimationFrame`. Keeps scheduling itself indefinitely until `stop()` is called.
+   */
   run(callback?: (this: Animation, elapsed: number) => any): void {
     const currentTime = Date.now();
 
@@ -194,6 +234,11 @@ export class Animation {
     });
   }
 
+  /**
+   * @method stop
+   * Cancels the pending `requestAnimationFrame` callback scheduled by `run()`, if any. Safe to call
+   * even when the loop isn't running.
+   */
   stop(): void {
     if (this.animateSeq !== -1) {
       cancelAnimationFrame(this.animateSeq);
@@ -201,18 +246,38 @@ export class Animation {
     }
   }
 
+  /**
+   * @method set
+   * Forwards to `Axis.set()` on the chart's single (index-0) axis - updates a key property of that
+   * axis, re-rendering if the chart is already rendered.
+   */
   set(type: string, value: unknown, isReset?: boolean): void {
     this.builder.axis(0).set(type, value, isReset);
   }
 
+  /**
+   * @method update
+   * Forwards to `Axis.update()` on the chart's single (index-0) axis - replaces its data and resets
+   * paging back to page 1.
+   */
   update(data: unknown): void {
     this.builder.axis(0).update(data);
   }
 
+  /**
+   * @method render
+   * Re-renders the underlying `Builder`-mounted chart.
+   */
   render(isAll?: boolean): void {
     this.builder.render(isAll);
   }
 
+  /**
+   * @method setup
+   * Default option values, matching `Animation.setup()` in the original: `{ render: false, canvas:
+   * true, interval: 0 }` merged with (not replacing) the full `Builder.setup()` default set, since
+   * an `Animation`'s options are ultimately handed straight through to `Builder.mount()`.
+   */
   static setup(): AnimationOptions {
     return extend({ render: false, canvas: true, interval: 0 }, Builder.setup(), true) as AnimationOptions;
   }

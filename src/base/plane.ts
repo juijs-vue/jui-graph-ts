@@ -69,6 +69,10 @@ function extend(origin: any, add: any, skip?: boolean): any {
   return origin;
 }
 
+/**
+ * Options for `Plane`'s preset 3D scatter/plane chart - see `Plane.init()`/`Plane.render()` for how
+ * these get translated into a full `Builder` `{axis, brush, widget}` config.
+ */
 export interface PlaneOptions extends CoreOptions {
   dimension: "2d" | "3d";
   width: number;
@@ -93,6 +97,14 @@ export interface PlaneOptions extends CoreOptions {
 // `Plane` really `extends Core` now (see header comment) - `root`/`options`/`event`/`index`/
 // `timestamp`, `emit()`/`on()`/`off()`/`setOption()`/`destroy()`, and `mount()` all come from
 // `Core` unmodified; `plane.js` never overrides any of them.
+/**
+ * Port of `chart.plane`'s `Plane` constructor function as a real ES class (`extends Core` - see
+ * header comment). A preset "3D scatter/plane chart" UI type: a scatter series is built up by
+ * calling `push()` per data point (or `append()` for a whole array at once) then `commit()` to seal
+ * that series into a `canvas.dot3d` brush entry, repeated once per series; `render()` then
+ * assembles everything into a single `Builder`-mounted chart. Never touches SVG/axis/brush classes
+ * directly - it only builds a declarative config and hands it to `Builder`.
+ */
 export class Plane extends Core<PlaneOptions> {
   private chart: Builder | null = null;
   private axis: any[] = [];
@@ -103,6 +115,14 @@ export class Plane extends Core<PlaneOptions> {
   private baseAxis: Record<string, any> = {};
   private etcAxis: Record<string, any> = {};
 
+  /**
+   * @method init
+   * Builds `baseAxis` (the config for the first/primary series's axis - `x`/`y`/`z` range domains
+   * from `options.x`/`.y`/`.z`, plus 3D `degree`/`depth`/`perspective`) and `etcAxis` (a hidden-grid
+   * variant used for every subsequent series added via `push()`/`append()`, so only the first
+   * series's axis is actually drawn). When `options.dimension === "2d"`, flattens the 3D rotation
+   * (`degree.x/y/z = 0`, `perspective = 1`) and hides the z-axis's text.
+   */
   init(): void {
     const opts = this.options;
     const defAxis = {
@@ -134,6 +154,13 @@ export class Plane extends Core<PlaneOptions> {
     }
   }
 
+  /**
+   * @method push
+   * Appends one data point to the axis currently being built (index `axisIndex`), lazily creating
+   * that axis entry first (from `baseAxis` for the first series, `etcAxis` for every later one) if
+   * it doesn't exist yet. Silently does nothing if `data` isn't an array. Call `commit()` after one
+   * or more `push()` calls to seal the current series into a brush and advance to the next one.
+   */
   push(data: any): void {
     if (!typeCheck("array", data)) return;
 
@@ -148,6 +175,13 @@ export class Plane extends Core<PlaneOptions> {
     this.axis[this.axisIndex].data.push(data);
   }
 
+  /**
+   * @method commit
+   * Seals the series currently being built (whatever data `push()` accumulated at `axisIndex`) by
+   * pushing a matching `canvas.dot3d` brush entry (sized `(r || options.r) * 2`, symbol defaulting
+   * to `options.symbol`) bound to that axis index, then advances `axisIndex` so the next `push()`
+   * call starts a new series.
+   */
   commit(symbol?: string, r?: number): void {
     const opts = this.options;
 
@@ -162,6 +196,12 @@ export class Plane extends Core<PlaneOptions> {
     this.axisIndex++;
   }
 
+  /**
+   * @method append
+   * Bulk convenience combining `push()` (for a whole `datas` array at once, assigned wholesale
+   * rather than pushed element-by-element) and `commit()` into a single call - adds one complete new
+   * series and its matching `canvas.dot3d` brush entry, then advances `axisIndex`.
+   */
   append(datas: any[], symbol?: string, r?: number): void {
     const opts = this.options;
 
@@ -179,6 +219,17 @@ export class Plane extends Core<PlaneOptions> {
     this.axisIndex++;
   }
 
+  /**
+   * @method render
+   * Builds and mounts the actual chart: adds a `polygon.rotate3d` widget when `dimension === "3d"`,
+   * tears down and discards any previously-mounted chart (clearing `root.innerHTML`), falls back to
+   * a single `baseAxis`-only axis if `push()`/`append()` were never called, then `new
+   * Builder().mount(this.root, {...})`s the accumulated `axis`/`brush`/`widget` arrays (canvas
+   * rendering, not auto-rendering). If `options.colors` is an array, resolves each through
+   * `chart.color()` and applies them via `chart.setTheme()`. Resets `axis`/`brush`/`widget`/
+   * `axisIndex` back to empty/zero afterward, so a subsequent `push()`/`append()`/`render()` cycle
+   * starts clean, then calls `chart.render()`.
+   */
   render(): void {
     const opts = this.options;
 
@@ -230,6 +281,12 @@ export class Plane extends Core<PlaneOptions> {
     chart.render();
   }
 
+  /**
+   * @method setup
+   * Default option values, matching `Plane.setup()` in the original: a 500x500x500 2D scatter plane
+   * with `x`/`y`/`z` domains of `[-100, 100]`, a 30-degree-ish default 3D tilt (`dx: 10, dy: 5, dz:
+   * 0`) used only when `dimension` is switched to `"3d"`, and no color override (`colors: null`).
+   */
   static setup(): PlaneOptions {
     return {
       dimension: "2d",

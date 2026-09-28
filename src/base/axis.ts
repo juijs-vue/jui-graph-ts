@@ -237,6 +237,11 @@ export interface GridInstance {
   render(): { root: TransElement; scale: GridRenderedScale };
 }
 
+/**
+ * Constructs a `GridInstance` for one grid-type string (e.g. `"block"`/`"panel"`), as resolved
+ * from `AxisChart.gridTypes[gridCfg.type]` - the real-import-built stand-in for the original's
+ * dropped `jui.include("chart.grid." + type)` string registry. See header comment.
+ */
 export interface GridConstructor {
   new (chart: AxisChart, axis: Axis, gridOptions: Record<string, unknown>): GridInstance;
   /** Mirrors the original's `Grid.setup()` static (default option values merged via
@@ -253,6 +258,11 @@ export interface MapInstance {
   render(): { root: TransElement; scale: GridRenderedScale };
 }
 
+/**
+ * Constructs the single `MapInstance` for this chart, as resolved from `AxisChart.mapType` - the
+ * real-import-built stand-in for the original's dropped, single, unconditional
+ * `jui.include("chart.map")`. See header comment.
+ */
 export interface MapConstructor {
   new (chart: AxisChart, axis: Axis, mapOptions: Record<string, unknown>): MapInstance;
   setup?: () => Record<string, unknown>;
@@ -399,13 +409,25 @@ export class Axis {
   private _clipRect: Element | null = null;
 
   // Mirrors of `cloneAxis`'s paging/3d fields, copied onto the instance by `init()`/`reload()`.
+  /** The currently-displayed page's data slice out of `origin` (`origin.slice(start, end)`), kept
+   *  in sync by `setScreen()`/`setZoom()`/`next()`/`prev()`/`update()`. See `init()`'s own doc
+   *  comment for a preserved quirk where this can briefly be out of sync with `start`/`end`/`page`
+   *  right after construction. */
   data: unknown[] = [];
+  /** The full, unpaged dataset for this axis (aliased from `cloneAxis.data` during `init()`, then
+   *  replaced wholesale by `update()`). `data` is always a slice of this. */
   origin: unknown[] = [];
+  /** Page size (max rows per page) used by `setScreen()`'s paging math. Defaults to `10000`. */
   buffer = 10000;
+  /** Number of rows `next()`/`prev()` step the window by. */
   shift = 1;
+  /** This axis's index within the chart's `axis` array (mirrors `cloneAxis.index`). */
   index = 0;
+  /** Current 1-based page number, as tracked/incremented by `setScreen()`. */
   page = 1;
+  /** Start offset (inclusive) of `data` within `origin`. */
   start = 0;
+  /** End offset (exclusive) of `data` within `origin`. */
   end = 0;
   // GENUINE PORT REGRESSION, found and fixed (not a preserved upstream bug - see below for the
   // full writeup): `degree` must NOT have an eager object-literal initializer like every other
@@ -457,7 +479,11 @@ export class Axis {
   // for the extremely common "single numeric `degree`" config shape, not that downstream
   // NaN-coercion logic itself.
   degree!: { x: number; y: number; z: number };
+  /** 3D depth factor read by grid rendering (`CoreGrid.getGridSize()`) when this axis is full-3D
+   *  (see `isFull3D()`). */
   depth = 0;
+  /** Perspective factor (0-1, where `1` means no perspective foreshortening) used by 3D grid
+   *  rendering. Defaults to `0.9`. */
   perspective = 0.9;
 
   /** `this.root` - the axis background rect, set by `drawAxisBackground()` inside `reload()`. */
@@ -1058,6 +1084,15 @@ export class Axis {
     if (this.chart.isRender()) this.chart.render();
   }
 
+  /**
+   * @method isFull3D
+   * Whether this axis has a configured z-grid: `true` whenever `this.z` (the rendered scale
+   * `drawGridType()` produced for the `"z"` slot in `reload()`) is neither `undefined` nor `null`.
+   * `drawGridType()` only returns a non-`null` scale for `"z"` when `axis.z` was itself a real
+   * config object, so this effectively answers "did this axis configure a z-axis" - used by
+   * `drawGridType()` itself to decide whether x/y/z/c grids get individually positioned (2D
+   * layout) or left for the 3D rotation pipeline to place instead.
+   */
   isFull3D(): boolean {
     return !typeCheck(["undefined", "null"], this.z);
   }
