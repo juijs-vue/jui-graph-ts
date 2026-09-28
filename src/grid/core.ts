@@ -226,12 +226,16 @@ export class CoreGrid extends Draw implements GridInstance {
    * appear across the real `grid/*.js` family - see PORT_STATUS.md's dependency map). */
   scale: any;
 
-  // Mixed in externally by `registerGridDraw2D`/`registerGridDraw3D`'s applier (see header
-  // comment) before first use - definite-assignment (`!`), matching `Draw`'s own `chart!`/`axis!`
-  // convention: calling any of these before a mixin has run throws the same
-  // "not a function"-shaped `TypeError` the original would too (never a silent no-op).
+  /** Builds one x-axis grid line/tick element at `position` (`"top"`/`"bottom"`) - mixed in
+   * externally by `registerGridDraw2D`/`registerGridDraw3D`'s applier (see header comment) before
+   * first use; calling it before a mixin has run throws the same "not a function"-shaped
+   * `TypeError` the original untyped engine would too (never a silent no-op - definite-assignment
+   * `!`, matching `Draw`'s own `chart!`/`axis!` convention). */
   createGridX!: (position: string, index: number, x: number, isActive: boolean, isLast: boolean) => TransElement;
+  /** Same as `createGridX` above, for a y-axis grid line/tick at `position` (`"left"`/`"right"`). */
   createGridY!: (position: string, index: number, y: number, isActive: boolean, isLast: boolean) => TransElement;
+  /** Draws one tick's own background/pattern image (`grid.image`), if configured - mixed in the
+   * same way as `createGridX`/`createGridY` above. */
   drawImage!: (orient: string, g: TransElement, tick: unknown, index: number, x: number, y: number) => void;
 
   /**
@@ -305,6 +309,11 @@ export class CoreGrid extends Draw implements GridInstance {
     return axisData || [];
   }
 
+  /** The grid line's own start/size/end extent along its perpendicular axis (e.g. a `"left"`/
+   * `"right"`-oriented grid's vertical extent comes from `axis.area("y")`/`"height"`, a `"top"`/
+   * `"bottom"` one from `"x"`/`"width"`) - used to size the grid's own border/tick lines. See the
+   * inline comment just below on a real, preserved `NaN`-poisoning bug in the 3D-rotation branch
+   * this method's non-full-3D case can hit. */
   getGridSize(): { start: number; size: number; end: number } {
     const orient = (this.grid as Record<string, unknown>).orient as string;
     const depth = this.axis.depth;
@@ -408,6 +417,11 @@ export class CoreGrid extends Draw implements GridInstance {
     return textElement;
   }
 
+  /** Normalizes the grid's own `line` config into a `{type, ...}` object: a string becomes
+   * `{type: line}`, a number becomes `{type: "solid", "stroke-width": line}`, any other truthy
+   * value becomes `{type: "solid"}`, and a falsy value stays falsy (no line drawn at all). See the
+   * inline comment just below on a real, preserved dead-code bug in the multi-word-`type`-splitting
+   * branch. */
   getLineOption(): unknown {
     let line: any = (this.grid as Record<string, unknown>).line;
 
@@ -439,6 +453,10 @@ export class CoreGrid extends Draw implements GridInstance {
     return line;
   }
 
+  /** Whether the y-axis grid LINE at `index` should actually be drawn - `false` specifically for
+   * the line that would sit exactly on the y-axis itself (the first line when `orient` is
+   * `"left"`, unless `grid.realtime`; the last line when `orient` is `"right"`), since that edge
+   * already gets the axis's own border line instead of a separate grid line. */
   checkDrawLineY(index: number, isLast: boolean): boolean {
     const y = this.axis.get("y") as Record<string, unknown>;
 
@@ -453,6 +471,8 @@ export class CoreGrid extends Draw implements GridInstance {
     return true;
   }
 
+  /** Same edge-skip logic as `checkDrawLineY()` above, for the x-axis (`"top"`-oriented: skips
+   * `index === 0`; `"bottom"`-oriented: skips the last index, unless `grid.realtime`). */
   checkDrawLineX(index: number, isLast: boolean): boolean {
     const x = this.axis.get("x") as Record<string, unknown>;
 
@@ -498,6 +518,8 @@ export class CoreGrid extends Draw implements GridInstance {
     }
   }
 
+  /** Same per-tick draw loop as `drawTop()` above (tick image + label + active-state check), for
+   * the bottom edge. */
   drawBottom(g: TransElement, ticks: unknown[], values: number[], checkActive: ((tick: unknown) => boolean) | null | undefined, moveX: number): void {
     for (let i = 0, len = ticks.length; i < len; i++) {
       const domain = this.format(ticks[i], i);
@@ -522,6 +544,8 @@ export class CoreGrid extends Draw implements GridInstance {
     }
   }
 
+  /** Same per-tick draw loop as `drawTop()` above, for the left edge (using `createGridY`/vertical
+   * `moveY` offset instead of `createGridX`/horizontal `moveX`). */
   drawLeft(g: TransElement, ticks: unknown[], values: number[], checkActive: ((tick: unknown) => boolean) | null | undefined, moveY: number): void {
     for (let i = 0, len = ticks.length; i < len; i++) {
       const domain = this.format(ticks[i], i);
@@ -546,6 +570,7 @@ export class CoreGrid extends Draw implements GridInstance {
     }
   }
 
+  /** Same per-tick draw loop as `drawLeft()` above, for the right edge. */
   drawRight(g: TransElement, ticks: unknown[], values: number[], checkActive: ((tick: unknown) => boolean) | null | undefined, moveY: number): void {
     for (let i = 0, len = ticks.length; i < len; i++) {
       const domain = this.format(ticks[i], i);

@@ -185,21 +185,44 @@ export interface WidgetChart {
   /** Matches `Builder.padding()`'s real overloaded signature. */
   padding(): { top: number; bottom: number; left: number; right: number };
   padding(key: string): number;
+  /** The chart's own root `SVG` builder handle - same instance every brush/widget's own `this.svg`
+   * (inherited from `Draw`) already is, exposed here too for a widget that specifically needs
+   * `this.chart.svg` (e.g. to draw into the chart's shared `<defs>` via `appendDefs()`, not
+   * available through the narrower `this.svg`). */
   svg: SVG;
+  /** The chart's own root DOM element (what `Builder.mount()` was given). */
   root: HTMLElement;
+  /** See `Builder.color()`'s own doc comment - resolves a palette/gradient/pattern color, given a
+   * series index or literal color string. */
   color(key1?: any, key2?: any): string;
+  /** See `Builder.theme()`'s own doc comment - reads one theme style value (or the whole theme
+   * object, or a ternary key pick). */
   theme(key?: any, value?: any, value2?: any): any;
+  /** See `Builder.text()`'s own doc comment - draws one `<text>`, resolving `{key}`-style icon
+   * placeholders in a string content argument. */
   text(attr: Record<string, any>, textOrCallback?: string | ((this: any) => void)): any;
+  /** See `Builder.texts()`'s own doc comment - draws several stacked `<text>` lines in one `<g>`. */
   texts(attr: Record<string, any>, texts: string[], lineBreakRate?: number): any;
   /** `Builder.get("axis"|"brush"|"widget"|"padding"|"area", key?)` - a widget reading e.g. another
    * brush's config (`chart.get("brush", index)`, as `chart.widget.tooltip`/`chart.widget.legend`
    * both do). */
   get(type: string, key?: any): any;
+  /** See `Core.emit()`'s own doc comment - fires a custom event to every matching `on()`
+   * listener. */
   emit(type: string, args?: any[]): any;
+  /** See `Builder.isRender()`'s own doc comment - whether an imperative call should currently
+   * trigger an auto-re-render. */
   isRender(): boolean;
+  /** See `Builder.render()`'s own doc comment - re-renders the whole chart. */
   render(isAll?: boolean): void;
+  /** See `Builder.updateBrush()`'s own doc comment - replaces or merges another brush's config by
+   * index, then re-renders (if `isRender()`). Used by e.g. `chart.widget.legend`'s own
+   * show/hide-series click handling. */
   updateBrush(index: number, brush: any, isReset?: boolean): void;
+  /** See `Builder.setCache()`'s own doc comment - stores a value in the chart's own per-instance
+   * cache, surviving across re-renders. */
   setCache(key: string, value: any): void;
+  /** See `Builder.getCache()`'s own doc comment - reads a value back, or `defValue` if unset. */
   getCache(key: string, defValue?: any): any;
 }
 
