@@ -144,10 +144,28 @@ export class Draw {
   canvas: any;
 
   // Subclasses are expected to define these (see header comment) - `Draw` itself never assigns
-  // them, so they stay `undefined` unless a subclass sets them, exactly like the original.
+  // them, so they stay `undefined` unless a subclass sets them, exactly like the original. Called,
+  // in this exact order, by `render()` below - see that method's own body for the full sequence
+  // (including the `animate !== false` gate on `drawAnimate`).
+
+  /** REQUIRED (unlike the other 3 hooks) - `render()` throws if this isn't a function. Builds and
+   * returns the actual root element (an `SVG`-helper group/shape, or `undefined` for a canvas-only
+   * draw target that paints directly with no SVG node of its own) for this brush/widget/grid. */
   draw?: () => any;
+  /** Optional setup step run once per `render()`, before `draw()` - typically reads
+   * `this.axis`'s area/scales into local fields `draw()` then uses, so per-render geometry isn't
+   * recomputed inside per-row loops. */
   drawBefore?: () => void;
+  /** Optional post-processing step run once per `render()`, after `draw()`/`drawAnimate()`, given
+   * `draw()`'s own return value. `CoreBrush`'s own override, for example, clips the element to the
+   * axis's clip-path (unless `brush.clip === false`), stamps a `brush-<type>` CSS class, and
+   * translates it to the plot area's origin - a concrete leaf class rarely needs its own. */
   drawAfter?: (obj: any) => void;
+  /** Optional animation step run once per `render()`, after `draw()` but before `drawAfter()` -
+   * ONLY called when the resolved `grid`/`brush`/`widget`/`map` config's own `animate` field isn't
+   * literally `false` (`render()`'s own `draw.animate !== false` gate, checked against whichever
+   * of those 4 is actually set on this instance). Given `draw()`'s own return value, same as
+   * `drawAfter`. */
   drawAnimate?: (obj: any) => void;
 
   /**
