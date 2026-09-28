@@ -917,6 +917,11 @@ export class Builder extends Core<BuilderOptions> {
     this.render();
   }
 
+  /** Reads one of the chart's own resolved config buckets - the whole bucket when `key` is
+   * omitted/not found in it, or one keyed entry within it (`get("brush", 0)` for the first
+   * brush's own config, `get("area", "width")` for one area-box field, etc). Used by
+   * `chart.widget.tooltip`/`chart.widget.legend` (via `WidgetChart.get`) to read another
+   * brush/widget's own config, e.g. the brush a tooltip is attached to. */
   get(type: "axis" | "brush" | "widget" | "padding" | "area", key?: any): any {
     const obj: Record<string, any> = {
       axis: this._axis,
@@ -933,18 +938,34 @@ export class Builder extends Core<BuilderOptions> {
     return obj[type];
   }
 
+  /** Every array (no `key`) or one `Axis` instance by its index in the chart's own `axis` config
+   * array - the same array a brush/widget's own numeric `axis` field indexes into. */
   axis(key?: number): any {
     return arguments.length === 0 ? this._axis : this._axis[key as number];
   }
 
+  /** The whole plot-area box (no `key`: `{x, y, x2, y2, width, height}`) or one of its fields
+   * (`key`: `"width"`/`"height"`/etc) - the chart's outer `width`/`height` minus `padding` on each
+   * side, i.e. where axes/brushes/widgets actually get drawn. */
   area(key?: string): any {
     return key === undefined || typeCheck("undefined", (this._area as any)[key]) ? this._area : (this._area as any)[key];
   }
 
+  /** The whole resolved padding object (no `key`) or one side's value (`key`: `"top"`/`"bottom"`/
+   * `"left"`/`"right"`) - the `padding` prop/option after `Builder.setup()`'s own
+   * `{top:50,bottom:50,left:50,right:50}` default is merged in. */
   padding(key?: string): any {
     return key === undefined || typeCheck("undefined", (this._padding as any)[key]) ? this._padding : (this._padding as any)[key];
   }
 
+  /** Resolves a color for a brush/widget to use, from the active theme's own `colors` palette
+   * array (cycling via `nextColor()` below once past the array's own length) - or, when `key` is
+   * already a literal color string, returns it verbatim. A single-argument call
+   * (`color(seriesIndex)`) is the common case; the 2-argument form additionally supports an
+   * explicit per-call `colors` override array/object (a brush's own `colors` config) instead of
+   * the theme's default palette. If the resolved color happens to be a registered gradient/pattern
+   * name (`this._hash`, populated by `createColor()`'s own gradient/pattern-descriptor handling),
+   * returns the `url(#...)` SVG reference to it instead of the raw color string. */
   color(key?: any, colors?: any[]): string {
     let color: any = null;
     const self = this;
@@ -979,6 +1000,12 @@ export class Builder extends Core<BuilderOptions> {
     return this.createColor(color);
   }
 
+  /** Resolves a `{key}`-style icon placeholder (`chart.text()`'s own `parseIconInText()` is what
+   * actually scans text for these) to the real Private-Use-Area codepoint string registered for
+   * that name under the chart's own `icon.type` (`registerIcon(type, icons)` - e.g.
+   * `register/icon/classic.ts`'s `classicIcons`). Throws if `icon.type` itself was never
+   * registered - the codepoint map, not the actual font FILE (`icon.path`, a separate concern -
+   * see `Chart.vue`'s own `icon` prop doc), is what's missing when this throws. */
   icon(key: string): string {
     const icons = iconRegistry.get(this._options.icon.type);
     if (!icons) {
@@ -987,6 +1014,10 @@ export class Builder extends Core<BuilderOptions> {
     return icons[key];
   }
 
+  /** Draws one `<text>` element via `this.svg.text(attr, content)`, after resolving any
+   * `{key}`-style icon placeholder in a string `textOrCallback` through `parseIconInText()` first
+   * (a function value is passed straight through unresolved - `SVG.text()`'s own callback-content
+   * form). An omitted `textOrCallback` draws an empty text node (not `undefined`/`"undefined"`). */
   text(attr: Record<string, any>, textOrCallback?: string | ((this: any) => void)): any {
     if (typeCheck("string", textOrCallback)) {
       textOrCallback = this.parseIconInText(textOrCallback as string);
@@ -997,6 +1028,12 @@ export class Builder extends Core<BuilderOptions> {
     return this.svg.text(attr, textOrCallback as any);
   }
 
+  /** Draws one `<text>` (via `this.text()` above, so icon placeholders resolve the same way) per
+   * entry in `texts`, stacked vertically - each line's own `y` offset is `index *
+   * (attr["font-size"] ?? 10) * lineBreakRate` (default line spacing when `lineBreakRate` is
+   * omitted: exactly one font-size per line), all inside one returned `<g>`. A non-string entry in
+   * `texts` is silently skipped (no line drawn for it, but the index gap still shifts every LATER
+   * line's own `y` the same as if it had been a real line). */
   texts(attr: Record<string, any>, texts: string[], lineBreakRate?: number): any {
     const g = this.svg.group();
 
@@ -1013,6 +1050,15 @@ export class Builder extends Core<BuilderOptions> {
     return g;
   }
 
+  /** The whole active theme object (no arguments), one style value by key (`theme("barFontSize")`
+   * - the common case, what every registered brush/widget's own `this.chart.theme(key)` call
+   * uses), or (3-argument form) a ternary style pick: `theme(condition, keyIfTrue, keyIfFalse)`
+   * resolves whichever of the two keys `condition` selects. Any key whose name contains `"Color"`
+   * is additionally run through `createColor()` (so a theme's own gradient/pattern-descriptor
+   * color values resolve to a real `url(#...)` reference here too, not just via `color()` above) -
+   * this is why `register/theme/types.ts`'s `ChartThemeOptions` types every `*Color` field as a
+   * plain `string`, not the richer gradient/pattern descriptor shape some colors config accepts:
+   * this method already resolves that for the caller. */
   theme(key?: any, value?: any, value2?: any): any {
     if (arguments.length === 0) {
       return this._theme;
@@ -1030,6 +1076,10 @@ export class Builder extends Core<BuilderOptions> {
     }
   }
 
+  /** The chart-level `format` option, applied to `args` (`this` bound to the `Builder`) when it's
+   * a function - the fallback `Draw.format()` uses for a brush/widget that doesn't define its own
+   * `format`. With no `format` option configured, returns `args[0]` unchanged (a no-op pass-
+   * through, not `undefined`). Called with zero arguments returns `undefined` regardless. */
   format(...args: any[]): any {
     if (args.length === 0) return;
     const callback = this._options.format;
@@ -1041,6 +1091,14 @@ export class Builder extends Core<BuilderOptions> {
     return args[0];
   }
 
+  /** Registers `callback` for a custom event `type` (case-insensitive, matched by `emit()` -
+   * inherited from `Core`, unmodified here) - same as `Core.on()`, plus an optional `resetType`:
+   * `"render"`/`"renderAll"` makes this a SELF-EXPIRING listener, additionally tracked in
+   * `this._handler.render`/`.renderAll` - it responds to every matching `emit()` normally, right
+   * up until the next `render()` (for `"render"`) or `render(true)` (for `"renderAll"` too) call,
+   * whose own `resetCustomEvent()` step `off()`s (fully deregisters, doesn't invoke) every handler
+   * queued that way. Useful for a one-render-cycle-scoped listener that shouldn't keep firing
+   * after the chart redraws. */
   on(type: string, callback: (...args: any[]) => void, resetType?: "render" | "renderAll"): any {
     if (!typeCheck("string", type) || !typeCheck("function", callback)) return;
 
@@ -1056,6 +1114,14 @@ export class Builder extends Core<BuilderOptions> {
     }
   }
 
+  /** Re-renders the whole chart from its current option state: resets the SVG/canvas surfaces
+   * (and any `"render"`/`"renderAll"`-scoped `on()` listeners - see that method), recalculates
+   * layout, then redraws axes, brushes, and widgets in that order, finally re-applying the theme's
+   * `fontFamily`/`backgroundColor` to the root and emitting a `"render"` event. `isAll` additionally
+   * resets the `sub` canvas layer (canvas-family widgets) and `"renderAll"`-scoped listeners -
+   * plain `render()`/`render(false)` leaves both alone, a lighter "just redraw with what's there"
+   * pass. The very FIRST call (before `this._initialize` is set) always runs regardless of the
+   * `render` option (see `isRender()`'s own doc) - every call after that respects it. */
   render(isAll?: boolean): void {
     this.svg.reset(isAll);
     this.resetCustomEvent(isAll);
@@ -1090,20 +1156,33 @@ export class Builder extends Core<BuilderOptions> {
     this._initialize = true;
   }
 
+  /** Appends `elem` into the chart's shared `<defs>` element (gradients/patterns/clip-paths a
+   * brush/widget/theme registers via `createGradient()`/`createPattern()`, not user-facing on its
+   * own). */
   appendDefs(elem: SvgElement): void {
     this._defs!.append(elem);
   }
 
+  /** Appends one more brush config to the end of the chart's own `brush` array and re-renders
+   * (only if `isRender()` is currently true - see that method) - the imperative equivalent of
+   * adding an entry to `<Chart :brush="[...]">`'s own array reactively. */
   addBrush(brush: any): void {
     this._options.brush.push(brush);
     if (this.isRender()) this.render();
   }
 
+  /** Removes the brush at `index` from the chart's own `brush` array and re-renders (only if
+   * `isRender()` is currently true). */
   removeBrush(index: number): void {
     this._options.brush.splice(index, 1);
     if (this.isRender()) this.render();
   }
 
+  /** Updates the brush config at `index` and re-renders (only if `isRender()` is currently true).
+   * `isReset: true` REPLACES the whole config object; omitted/`false` shallow-MERGES `brush`'s own
+   * keys onto the existing config instead (`extend()`'s in-place merge, not a reactive Vue prop
+   * write - matches `Builder.updateBrush()`'s WidgetChart re-declaration `chart.widget.legend`/
+   * `chart.widget.tooltip` call to toggle another brush's own config from a widget). */
   updateBrush(index: number, brush: any, isReset?: boolean): void {
     if (isReset === true) {
       this._options.brush[index] = brush;
@@ -1113,16 +1192,20 @@ export class Builder extends Core<BuilderOptions> {
     if (this.isRender()) this.render();
   }
 
+  /** Same as `addBrush()` above, but for the chart's own `widget` array. */
   addWidget(widget: any): void {
     this._options.widget.push(widget);
     if (this.isRender()) this.render();
   }
 
+  /** Same as `removeBrush()` above, but for the chart's own `widget` array. */
   removeWidget(index: number): void {
     this._options.widget.splice(index, 1);
     if (this.isRender()) this.render();
   }
 
+  /** Same replace-vs-merge split as `updateBrush()` above, but for the chart's own `widget`
+   * array. */
   updateWidget(index: number, widget: any, isReset?: boolean): void {
     if (isReset === true) {
       this._options.widget[index] = widget;
@@ -1132,11 +1215,24 @@ export class Builder extends Core<BuilderOptions> {
     if (this.isRender()) this.render();
   }
 
+  /** Swaps the active theme (a registered theme name, or a plain style-value object merged the
+   * same way `setThemeStyle()`'s own string-vs-object branch handles the initial `theme`
+   * option/prop) and, only if `isRender()` is currently true, does a FULL re-render
+   * (`render(true)`, not plain `render()`) - a theme change touches every drawn element's own
+   * style, unlike `addBrush()`/`updateWidget()`/etc's lighter `render()`. */
   setTheme(theme: any): void {
     this.setThemeStyle(theme);
     if (this.isRender()) this.render(true);
   }
 
+  /** With both arguments, sets the chart's own `width`/`height` option first; either way, applies
+   * the resolved size to the root `SVG` (`this.svg.size(...)`) and, when the chart was mounted
+   * with `canvas: true`, resizes every `<canvas>` element to match (accounting for
+   * `HidpiUtil.pixelRatio`, so canvas content stays crisp on a high-DPI display) - then, only if
+   * `isRender()` is currently true, does a full `render(true)`. Called with no arguments, this
+   * re-measures/re-applies whatever
+   * `width`/`height` already is (e.g. after the container's own CSS size changed) rather than
+   * setting a new one - see `resize()` below, which does exactly that on window resize. */
   setSize(width?: number, height?: number): void {
     if (arguments.length === 2) {
       this._options.width = width as number;
@@ -1170,6 +1266,14 @@ export class Builder extends Core<BuilderOptions> {
     return true;
   }
 
+  /** Meant to be called on a window/container resize - re-measures/re-applies the chart's own
+   * `width`/`height` via `setSize()` (only when `isFullSize()`, i.e. a percentage-based size that
+   * actually needs re-measuring - see that method's own "PRESERVED BUG" note: it always returns
+   * `true` in the current source, so this check is currently a no-op gate). **PRESERVED QUIRK**:
+   * the trailing `if (!this.isRender())` is inverted from what the name suggests - it forces a
+   * full `render(true)` specifically when `isRender()` is FALSE (i.e. when the `render` option is
+   * off), not when it's on; kept exactly as the original engine has it, not "fixed" to `if
+   * (this.isRender())`. */
   resize(): void {
     if (this.isFullSize()) {
       this.setSize();
@@ -1179,14 +1283,26 @@ export class Builder extends Core<BuilderOptions> {
     }
   }
 
+  /** Whether the chart should currently auto-re-render on an imperative call (`axis(i).update()`/
+   * `.zoom()`/etc, `addBrush()`/`updateWidget()`/etc above) - the resolved `render` option, EXCEPT
+   * the very first check ever made (before this chart's first real `render()` call sets
+   * `this._initialize`), which always returns `true` regardless of the configured `render` option
+   * - so the chart's own initial draw is never skippable, only subsequent auto-renders are. */
   isRender(): boolean {
     return !this._initialize ? true : this._options.render;
   }
 
+  /** Stores an arbitrary value under `key` in the chart's own private cache
+   * (`chart.getCache`/`setCache` - a brush/widget's own per-instance state that needs to survive
+   * across re-renders without living on the brush/widget config object itself, e.g.
+   * `canvas.activebubble`'s own running bubble-simulation state). Cleared only by constructing a
+   * new `Builder` - `render()` never touches it. */
   setCache(key: string, value: any): void {
     this._cache[key] = value;
   }
 
+  /** Reads back a value `setCache()` stored under `key`, or `defValue` (default: `undefined`) if
+   * nothing was ever stored there. */
   getCache(key: string, defValue?: any): any {
     if (this._cache[key] === undefined) return defValue;
     return this._cache[key];
