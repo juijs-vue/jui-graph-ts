@@ -90,6 +90,14 @@ interface Rotatable {
   rotate(depth: number, degree: any, cx: number, cy: number, cz: number): void;
 }
 
+/** Port of `chart.draw`'s abstract mixin base - the shared render lifecycle (`render()`, calling
+ * `drawBefore`/`draw`/`drawAnimate`/`drawAfter` in that order) every `chart.brush.*`/
+ * `chart.widget.*`/`chart.grid.*` leaf type is built on, via `CoreBrush`/`CoreWidget`/`CoreGrid`.
+ * Not directly usable on its own: its constructor takes no arguments, and a real subclass is
+ * expected to assign its own `draw` (required) and optionally `drawBefore`/`drawAfter`/
+ * `drawAnimate`; `chart`/`axis`/`grid`/`brush`/`widget`/`map`/`svg`/`canvas` are all populated
+ * externally, by `Builder`'s own `drawBrush()`/`drawWidget()`, right after construction - see each
+ * field's own doc comment below for exactly which of those wires it and when. */
 export class Draw {
   // Populated externally post-construction (see header comment) - not set by this constructor,
   // matching the original's parameterless `var Draw = function() {}`.

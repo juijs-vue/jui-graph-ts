@@ -185,11 +185,15 @@ function defineOptions(ctor: { setup?: () => any }, options: any): any {
 }
 
 // ---- forward-reference stand-in for base/axis.js (concurrent, unported) -----------------------
+/** The minimal shape `Builder` itself needs from a real `Axis` instance - satisfied by the actual
+ * `Axis` class (`base/axis.ts`) once registered via `registerAxis()`. Kept narrow/decoupled so
+ * `builder.ts` doesn't need to import `axis.ts` directly. */
 export interface AxisLike {
   data?: any[];
   index?: number;
   reload(options: any): void;
 }
+/** Constructor shape `registerAxis()` expects - satisfied by the real `Axis` class. */
 export interface AxisConstructor {
   new (chart: Builder, rawOptions: any, mergedOptions: any): AxisLike;
   setup?: () => any;
@@ -201,6 +205,9 @@ export function registerAxis(ctor: AxisConstructor): void {
 }
 
 // ---- forward-reference registries for chart.brush.* / chart.widget.* / chart.theme.* / chart.icon.* ----
+/** The minimal shape `Builder` needs from a registered brush/widget instance to drive its render
+ * lifecycle - satisfied by `Draw` (and therefore every `CoreBrush`/`CoreWidget`/`CoreGrid`
+ * subclass), kept narrow/decoupled so `builder.ts` doesn't need to import those directly. */
 export interface DrawLike {
   chart: any;
   axis: any;
@@ -210,6 +217,9 @@ export interface DrawLike {
   isRender?(): boolean;
   format?: any;
 }
+/** Constructor shape `registerBrush()`/`registerWidget()` expect - satisfied by any class
+ * extending `Draw` with a parameterless-or-trailing-args-ignored constructor (see `CoreBrush`'s
+ * own header comment on why a 0-arg subclass still satisfies this 3-parameter type). */
 export interface DrawConstructor {
   new (chart: Builder, axis: AxisLike | undefined, options: any): DrawLike;
   setup?: () => any;
@@ -220,15 +230,23 @@ const widgetRegistry = new Map<string, DrawConstructor>();
 const themeRegistry = new Map<string, Record<string, any>>();
 const iconRegistry = new Map<string, Record<string, string>>();
 
+/** Registers a `chart.brush.<type>` constructor (e.g. `registerBrush('bar', BarBrush)`) - `type`
+ * is what a chart's own `brush: [{ type: '<type>', ... }]` config looks up. */
 export function registerBrush(type: string, ctor: DrawConstructor): void {
   brushRegistry.set(type, ctor);
 }
+/** Same as `registerBrush()`, for a `chart.widget.<type>` constructor. */
 export function registerWidget(type: string, ctor: DrawConstructor): void {
   widgetRegistry.set(type, ctor);
 }
+/** Registers a named theme's full style-value object (e.g. `registerTheme('classic',
+ * classicTheme)`) - looked up by a chart's own `theme: '<name>'` string option. */
 export function registerTheme(name: string, style: Record<string, any>): void {
   themeRegistry.set(name, style);
 }
+/** Registers a named icon set's `{iconName: codepoint}` map (e.g. `registerIcon('classic',
+ * classicIcons)`) - looked up by a chart's own `icon: { type: '<name>' }` option, and resolved
+ * per-name by `Builder.icon()`. */
 export function registerIcon(type: string, icons: Record<string, string>): void {
   iconRegistry.set(type, icons);
 }
@@ -262,6 +280,9 @@ interface ChartArea {
   y2: number;
 }
 
+/** The full config shape a `Builder.mount(root, options)` call accepts (`Builder.setup()`'s own
+ * defaults are noted per-field below) - this is exactly what `<Chart>`'s own props assemble into
+ * (see `jui-chart-vue`'s `Chart.vue`), one field per prop of the same name. */
 export interface BuilderOptions extends CoreOptions {
   width: number | string;
   height: number | string;
@@ -279,9 +300,15 @@ export interface BuilderOptions extends CoreOptions {
   [key: string]: any;
 }
 
-// `Builder` really `extends Core` now (see header comment) - `root`/`options`/`event`/`index`/
-// `timestamp`, `emit()`/`off()`/`setOption()`/`destroy()`, and `mount()` all come from `Core`
-// unmodified. Only `on()` is overridden below (the original redefines it too).
+/** The top-level engine object one real chart is built from - owns the root SVG/canvas surfaces,
+ * the resolved theme, every axis/brush/widget instance, and the whole render lifecycle
+ * (`render()`, `drawAxis()`/`drawBrush()`/`drawWidget()`). This is what `jui-chart-vue`'s
+ * `<Chart>` component constructs and calls `.mount(root, options)` on (via its own `ChartBuilder`
+ * subclass - see `jui-chart-vue`'s `register/chartMap.ts`) - see `BuilderOptions` for the full
+ * config shape it accepts. `Builder` really `extends Core` (see this file's header comment) -
+ * `root`/`options`/`event`/`index`/`timestamp`, `emit()`/`off()`/`setOption()`/`destroy()`, and
+ * `mount()` all come from `Core` unmodified; only `on()` is overridden below (the original
+ * redefines it too). */
 export class Builder extends Core<BuilderOptions> {
   svg!: SVG;
 

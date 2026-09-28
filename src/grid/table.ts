@@ -71,6 +71,13 @@ function extend(origin: Record<string, unknown>, add: Record<string, unknown> | 
   return origin;
 }
 
+/** `chart.grid.table` - builds a row/column table-cell scale (via `drawBefore()`'s own `this.scale`
+ * closure, which works correctly) for use as an axis group's "c"/custom grid. Its own `custom()`
+ * draw method is genuinely dead code, though - see that method's own doc comment for the full,
+ * newly-found "PRESERVED BUG" investigation (a `var`-shadowing bug means its guiding loop can never
+ * run a single iteration). See this file's own header comment for a related investigation into its
+ * unusual 3-parameter constructor signature (a legacy curiosity, resolved to not actually matter at
+ * runtime). */
 export class TableGrid extends CoreGrid {
   // Mirrors the original's constructor-top-level `var rowUnit, columnUnit, outerPadding, row,
   // column;` - declared as instance fields for the same reason `drawBefore()`'s own claimed

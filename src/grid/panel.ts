@@ -36,6 +36,10 @@ function extend(origin: Record<string, unknown>, add: Record<string, unknown> | 
   return origin;
 }
 
+/** `chart.grid.panel` - the auto-registered default "c"/custom axis grid (see this file's own
+ * header comment: `base/axis.ts`'s `drawGridType()` defaults `axis.c.type` to `"panel"`), drawing
+ * one full-axis-area background rect. See `custom()`'s own doc comment for two harmless-in-this-file
+ * preserved quirks (a hardcoded scale index, and an x/y subtraction that always nets to `0`). */
 export class PanelGrid extends CoreGrid {
   /**
    * @method custom

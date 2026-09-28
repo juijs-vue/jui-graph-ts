@@ -31,8 +31,9 @@
 // header) IS a genuine, self-contained, single-class design bug independent of the registry
 // mechanics, and IS preserved faithfully.
 
-/** Namespace URI constants used throughout the SVG element builder tree. */
+/** SVG namespace URI, used for every `createElementNS()` call in this builder tree. */
 export const SVG_NS = "http://www.w3.org/2000/svg";
+/** XLink namespace URI, used for `xlink:href`-style attributes (e.g. `<image>`'s own href). */
 export const XLINK_NS = "http://www.w3.org/1999/xlink";
 
 interface EventRecord {

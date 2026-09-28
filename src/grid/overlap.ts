@@ -26,6 +26,10 @@ function extend(origin: Record<string, unknown>, add: Record<string, unknown> | 
   return origin;
 }
 
+/** `chart.grid.overlap` - a "c"/custom axis grid that draws one background rect per row. Its own
+ * `custom()` method renders as a genuinely empty `<g>` in every real invocation, though - see that
+ * method's own doc comment for the full "PRESERVED BUG" investigation (every rect it builds is
+ * real but never appended to the returned root, so nothing ever becomes visible). */
 export class OverlapGrid extends CoreGrid {
   /**
    * @method custom

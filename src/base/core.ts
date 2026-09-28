@@ -110,6 +110,8 @@ export interface CoreEvent {
   unique: boolean;
 }
 
+/** Base config shape every `Core` subclass's own options extend (`Builder`'s `BuilderOptions`,
+ * `Plane`'s `PlaneOptions`) - just the one `event` field `Core` itself reads at construction. */
 export interface CoreOptions {
   /** @cfg {Object} [event={}] Defines a DOM/custom event map to be bound at construction time -
    * `Core.setup()`'s only default (see header comment: this default only ever reached a real

@@ -4,19 +4,34 @@
  */
 
 // Constants for time units in milliseconds
+/** Milliseconds per SECOND (`1000`) - despite the name, this is the divisor `diff()` uses to
+ * convert a millisecond delta into seconds, not "how many ms are in one ms" - a naming mismatch
+ * with its `MINUTE`/`HOUR`/`DAY` siblings (which are correctly named for what they divide into),
+ * preserved as-is rather than renamed. */
 export const MILLISECOND = 1000;
+/** Milliseconds per minute (`60000`) - `diff()`'s divisor for `type === "minutes"`. */
 export const MINUTE = 1000 * 60;
+/** Milliseconds per hour (`3600000`) - `diff()`'s divisor for `type === "hours"`. */
 export const HOUR = 1000 * 60 * 60;
+/** Milliseconds per day (`86400000`) - `diff()`'s divisor for `type === "days"`. */
 export const DAY = 1000 * 60 * 60 * 24;
 
 // Unit string constants
+/** The `unit` string `add(date, years, amount)` expects to add whole years. */
 export const years = "years";
+/** The `unit` string `add(date, months, amount)` expects to add whole months. */
 export const months = "months";
+/** The `unit` string `add(date, days, amount)` expects to add whole days. */
 export const days = "days";
+/** The `unit` string `add(date, hours, amount)` expects to add whole hours. */
 export const hours = "hours";
+/** The `unit` string `add(date, minutes, amount)` expects to add whole minutes. */
 export const minutes = "minutes";
+/** The `unit` string `add(date, seconds, amount)` expects to add whole seconds. */
 export const seconds = "seconds";
+/** The `unit` string `add(date, milliseconds, amount)` expects to add raw milliseconds. */
 export const milliseconds = "milliseconds";
+/** The `unit` string `add(date, weeks, amount)` expects to add whole weeks (7-day increments). */
 export const weeks = "weeks";
 
 /**

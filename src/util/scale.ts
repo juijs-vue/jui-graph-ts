@@ -160,6 +160,11 @@ export interface OrdinalScale {
   invert(x: number): number
 }
 
+/** Builds a category (ordinal) scale: maps a value in `domain()` (or, if `t` isn't found there and
+ * is itself a valid `range()` index, that numeric index directly) to its corresponding `range()`
+ * value, caching each resolved key. `rangePoints`/`rangeBands`/`rangeBand` additionally let the
+ * range be derived from an interval + item count, spreading domain entries evenly across it (as
+ * discrete points, or as banded/lane widths) rather than requiring a hand-built `range()` array. */
 export function ordinal(): OrdinalScale {
   let _domain: (string | number)[] = []
   let _range: number[] = []

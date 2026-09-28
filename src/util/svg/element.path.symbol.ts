@@ -4,6 +4,8 @@
 import { PathElement } from "./element.path";
 import { registerElementModule } from "./element";
 
+/** The 5 marker-shape path templates `PathSymbolElement.template()` builds, one field per
+ * supported `symbol` name (`rect`/`rectangle` are aliases for the same square template). */
 export interface SymbolTemplates {
   triangle: string;
   rect: string;

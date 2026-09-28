@@ -202,6 +202,8 @@ export function parseGradient(color: string): GradientDescriptor | string {
   return { type: type + 'Gradient', attr, children: stops }
 }
 
+/** One `<stop>` of a parsed gradient descriptor (`GradientDescriptor.children`) - see this
+ * interface's own `offset` field for a real, preserved parsing quirk. */
 export interface GradientStop {
   type: string
   attr: Record<string, string | number>
