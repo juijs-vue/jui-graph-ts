@@ -4,9 +4,11 @@
 import { TransElement } from "./element.transform";
 import { registerElementModule } from "./element";
 
+/** A `TransElement` (`<polyline>`/`<polygon>`) with a fluent point-list builder. */
 export class PolyElement extends TransElement {
   private orders: string[] = [];
 
+  /** Appends one `(x,y)` point to the pending points list. */
   point(x: number | string, y: number | string): this {
     this.orders.push(x + "," + y);
     return this;

@@ -68,6 +68,9 @@ export class PanelGrid extends CoreGrid {
     );
   }
 
+  /** `Draw.render()` lifecycle hook: builds this grid's `scale` as a function that ignores its own
+   * `i` argument entirely and always returns the full `axis.area()` rect (`x`/`y`/`width`/
+   * `height`) - the single "panel" rect `custom()` above then draws. */
   drawBefore = (): void => {
     const axis = this.axis;
 

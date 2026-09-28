@@ -12,6 +12,7 @@
 
 import { linear } from './linear'
 
+/** The callable scale object returned by `log()` - see its doc comment. */
 export interface LogScale {
   (x: number): number
   cache(): Record<string, number>

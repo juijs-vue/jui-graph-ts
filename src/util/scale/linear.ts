@@ -17,6 +17,7 @@
 
 import { fixed, interpolateNumber, interpolateRound, nice } from '../math'
 
+/** The callable scale object returned by `linear()` - see its doc comment. */
 export interface LinearScale {
   (x: number): number
   cache(): Record<string, number>

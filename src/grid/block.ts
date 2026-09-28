@@ -149,11 +149,22 @@ export class BlockGrid extends CoreGrid {
     moveZ: number,
   ) => void
 
+  /** Draws the `"center"` (z-axis, full-3D) orientation: one z-axis tick per domain item via the
+   * mixed-in `drawCenter()`, offset by `half_band` (the same per-item centering `top()`/`bottom()`/
+   * `left()`/`right()` below use), plus the shared base line for this side. Unlike the other four
+   * orients, `center` has no trailing boundary tick of its own. */
   center(g: TransElement): void {
     this.drawCenter(g, this.domain, this.points, null, this.half_band)
     this.drawBaseLine('center', g)
   }
 
+  /** Draws the top-oriented grid: the per-tick background pattern (`drawPattern`), the shared
+   * per-domain-item tick/label loop (`CoreGrid.drawTop()`), the base line, and finally one extra
+   * boundary tick drawn explicitly at `this.end`. That trailing call is required because
+   * `CoreGrid.drawTop()`'s own `isLast` check is always `false` for `grid.type === "block"` (see
+   * header comment quirk 2) - without it a block grid would never get its final divider. The
+   * `null as unknown as boolean` cast preserves the original's `isActive: null` argument there
+   * (quirk 1; behaviorally identical to `false` in every real `createGridX` caller). */
   top(g: TransElement): void {
     this.drawPattern('top', this.domain, this.points, true)
     this.drawTop(g, this.domain, this.points, null, this.half_band)
@@ -162,6 +173,7 @@ export class BlockGrid extends CoreGrid {
     g.append(this.createGridX('top', this.domain.length, this.end, null as unknown as boolean, true))
   }
 
+  /** Same as `top()` above, for the bottom edge. */
   bottom(g: TransElement): void {
     this.drawPattern('bottom', this.domain, this.points, true)
     this.drawBottom(g, this.domain, this.points, null, this.half_band)
@@ -169,6 +181,8 @@ export class BlockGrid extends CoreGrid {
     g.append(this.createGridX('bottom', this.domain.length, this.end, null as unknown as boolean, true))
   }
 
+  /** Same as `top()` above, for the left edge (`createGridY`/`drawLeft` in place of
+   * `createGridX`/`drawTop`). */
   left(g: TransElement): void {
     this.drawPattern('left', this.domain, this.points, true)
     this.drawLeft(g, this.domain, this.points, null, this.half_band)
@@ -176,6 +190,7 @@ export class BlockGrid extends CoreGrid {
     g.append(this.createGridY('left', this.domain.length, this.end, null as unknown as boolean, true))
   }
 
+  /** Same as `left()` above, for the right edge. */
   right(g: TransElement): void {
     this.drawPattern('right', this.domain, this.points, true)
     this.drawRight(g, this.domain, this.points, null, this.half_band)
@@ -183,6 +198,14 @@ export class BlockGrid extends CoreGrid {
     g.append(this.createGridY('right', this.domain.length, this.end, null as unknown as boolean, true))
   }
 
+  /** Resolves this grid's ordinal domain array from `grid.domain`: a string reads that field off
+   * each axis data row (in forward or, when `grid.reverse` is set, backward row order); a
+   * function is called once with `this.chart` bound as `this` and is expected to return the whole
+   * domain array at once (unlike per-item resolution elsewhere in this engine); an array is used
+   * as-is. Whatever the source, the result is then unconditionally reversed again when
+   * `grid.reverse` is set - see header comment quirk 4 for why this makes `reverse` a genuine
+   * no-op specifically for the string-domain branch (which already iterated backward), while
+   * still correctly reversing the function/array branches (which build forward). */
   initDomain(): (string | number)[] {
     let domain: (string | number)[] = []
 
@@ -221,6 +244,13 @@ export class BlockGrid extends CoreGrid {
     return domain
   }
 
+  /** Overrides `CoreGrid.wrapper()` (identity there) so index-based scale lookups can resolve
+   * through a configured `grid.key` field instead of a raw index: when `key` is set, wraps
+   * `scale` in a `new_scale(i)` closure that looks up `axis.data[i][key]` and passes that value
+   * through the underlying ordinal `scale`. Returns `scale` unwrapped when `key` is not set. See
+   * header comment quirk 5: the `reverse`-handling fallback branch (only reachable when `key` is
+   * set but `i` is not a number) is effectively dead code for every real caller in this codebase,
+   * since a scale is always invoked with a numeric index. */
   wrapper(scale: OrdinalScale, key?: string): OrdinalScale {
     const old_scale = scale
     const self = this
@@ -248,6 +278,13 @@ export class BlockGrid extends CoreGrid {
   // type-system consequence `grid/core.ts`'s own `drawAfter` field already documents, not a
   // behavior change (arrow-field `this` binding is irrelevant here: both are always invoked as
   // `this.drawBefore()`/`this.draw()`, from `Draw.render()`).
+  /** `Draw.render()` lifecycle hook: resolves this grid's ordinal scale from `initDomain()` and
+   * `getGridSize()`, laying out one evenly spaced point per domain item across
+   * `[obj.start, obj.end]` (unconditionally, regardless of `orient` - see header comment's
+   * cross-check note on why this differs from `grid/range.ts`'s left/right-reversing
+   * `drawBefore()`), then caches the resulting `domain`/`points`/`start`/`size`/`end`/`band`/
+   * `half_band`/`bar`/`reverse` fields for `top()`/`bottom()`/`left()`/`right()`/`center()` to
+   * read. */
   drawBefore = (): void => {
     const domain = this.initDomain()
     const obj = this.getGridSize()
@@ -269,6 +306,8 @@ export class BlockGrid extends CoreGrid {
     this.reverse = this.grid.reverse ?? false
   }
 
+  /** `Draw.render()` lifecycle hook: the entry point that actually triggers this grid's SVG
+   * rendering, via `CoreGrid.drawGrid()`. */
   draw = (): { root: TransElement; scale: unknown } => {
     // Original: `return this.drawGrid("block");` - `drawGrid()` never reads any argument (see
     // `grid/core.ts`), so `"block"` was always dead code there too. Dropped here only to satisfy

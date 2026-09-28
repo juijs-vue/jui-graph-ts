@@ -12,6 +12,7 @@
 import { linear } from './linear'
 import * as timeUtil from '../time'
 
+/** The callable scale object returned by `time()` - see its doc comment. */
 export interface TimeScale {
   (x: Date | number): number
   cache(): Record<string, number>

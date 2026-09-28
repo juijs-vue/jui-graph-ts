@@ -87,6 +87,7 @@ const {
   scaleValue: coreScaleValue,
 } = MathUtil
 
+/** A 2D point, as returned by `rotate()`. */
 export interface Point2D {
   x: number
   y: number
@@ -97,6 +98,7 @@ export function rotate(x: number, y: number, radianValue: number): Point2D {
   return coreRotate(x, y, radianValue)
 }
 
+/** A `{width, height}` box, as returned by `resize()`. */
 export interface ResizedBox {
   width: number
   height: number
@@ -137,6 +139,13 @@ export function getFixed(a: number | string, b: number | string): number {
   return coreGetFixed(a, b)
 }
 
+/**
+ * The decimal-precision-safe arithmetic object returned by `fixed()`. Calling it directly
+ * (`fixedMath(value)`) rounds `value` to the same decimal precision as the `fixedValue` it was
+ * built from; `.plus`/`.minus`/`.multi`/`.remain` perform that operation on two raw operands
+ * (scaled up by, then back down from, that same precision) to avoid floating-point rounding
+ * artifacts (e.g. `0.1 + 0.2`).
+ */
 export interface FixedMath {
   (value: number): number
   plus(a: number, b: number): number
@@ -179,14 +188,17 @@ export function round(num: number, fixedPlaces: number): number {
   return coreRound(num, fixedPlaces)
 }
 
+/** Decimal-safe addition: `a + b`, re-rounded to the decimal precision needed by `a`/`b`. */
 export function plus(a: number, b: number): number {
   return corePlus(a, b)
 }
 
+/** Decimal-safe subtraction: `a - b`, re-rounded to the decimal precision needed by `a`/`b`. */
 export function minus(a: number, b: number): number {
   return coreMinus(a, b)
 }
 
+/** Decimal-safe multiplication: `a * b`, re-rounded to the decimal precision needed by `a`/`b`. */
 export function multi(a: number, b: number): number {
   return coreMulti(a, b)
 }
@@ -196,10 +208,12 @@ export function div(a: number, b: number): number {
   return coreDiv(a, b)
 }
 
+/** Decimal-safe modulo: `a % b`, re-rounded to the decimal precision needed by `a`/`b`. */
 export function remain(a: number, b: number): number {
   return coreRemain(a, b)
 }
 
+/** The result of `nice()`: a rounded `[min, max]` range and the per-tick `spacing` within it. */
 export interface NiceResult {
   min: number
   max: number

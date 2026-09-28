@@ -62,6 +62,7 @@ import { add } from './time'
 // circle
 // ---------------------------------------------------------------------------------------------
 
+/** The callable scale object returned by `circle()` - see its doc comment. */
 export interface CircleScale {
   (t: number): void
   domain(): number[]
@@ -145,6 +146,7 @@ export function circle(): CircleScale {
 // ordinal (embedded/simple - see this file's header comment for the discrepancy vs ./scale/ordinal.ts)
 // ---------------------------------------------------------------------------------------------
 
+/** The callable scale object returned by `ordinal()` - see its doc comment. */
 export interface OrdinalScale {
   (t: string | number): number | null
   domain(): (string | number)[]
@@ -254,6 +256,7 @@ export function ordinal(): OrdinalScale {
 // linear (embedded duplicate of ./scale/linear.ts - see this file's header comment)
 // ---------------------------------------------------------------------------------------------
 
+/** The callable scale object returned by `linear()` - see its doc comment. */
 export interface LinearScale {
   (x: number): number
   cache(): Record<string, number>
@@ -440,6 +443,7 @@ function addTime(date: number | Date, type: TimeUnit, amount: number): Date {
   return add(new Date(date), type, amount)
 }
 
+/** The callable scale object returned by `time()` - see its doc comment. */
 export interface TimeScale {
   (x: number): number
   cache(): Record<string, number>
@@ -577,6 +581,7 @@ export function time(): TimeScale {
 // log (embedded, uses `linear()` above - see this file's header comment, deviation 1)
 // ---------------------------------------------------------------------------------------------
 
+/** The callable scale object returned by `log()` - see its doc comment. */
 export interface LogScale extends Omit<LinearScale, 'domain' | 'invert' | 'ticks'> {
   (x: number): number
   log(): number[]

@@ -6,6 +6,7 @@
 // implementation doesn't implement a callable function (the JS original has `function func(t) {}`
 // as a no-op), and has simpler factory construction - no numeric-index resolution or caching.
 
+/** The scale object returned by `circle()` - see its doc comment. */
 export interface CircleScale {
   domain(): (string | number)[]
   domain(values: (string | number)[]): CircleScale

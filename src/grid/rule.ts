@@ -224,6 +224,13 @@ export class RuleGrid extends CoreGrid {
    * /`registerGridDraw3D` run - this one never does, by anything, ever). */
   axisLine!: (attr: Record<string, unknown>) => TransElement;
 
+  /** Draws the top-oriented reference axis line (via the permanently-broken `this.axisLine(...)`
+   * - see header comment's extend-chain section and the `axisLine!` field doc above) plus one tick
+   * mark + optional label per resolved value, entirely via its own `this.chart.svg.group()`/
+   * `.translate()`/`.append()` calls - NOT delegating to `CoreGrid.drawTop()` the way every other
+   * concrete grid does (see header comment). Independently callable/testable, but never reached via
+   * a real `render()` pass since `drawBefore()`'s `initDomain()` (bug 2) and `draw()` (bug 1) both
+   * throw first. */
   top(g: TransElement): void {
     const height = this.axis.area("height");
     const halfHeight = height / 2;
@@ -280,6 +287,7 @@ export class RuleGrid extends CoreGrid {
     }
   }
 
+  /** Same independent, non-`CoreGrid`-delegating draw logic as `top()` above, for the bottom edge. */
   bottom(g: TransElement): void {
     const height = this.axis.area("height");
     const halfHeight = height / 2;
@@ -336,6 +344,7 @@ export class RuleGrid extends CoreGrid {
     }
   }
 
+  /** Same independent, non-`CoreGrid`-delegating draw logic as `top()` above, for the left edge. */
   left(g: TransElement): void {
     const width = this.axis.area("width");
     const halfWidth = width / 2;
@@ -391,6 +400,7 @@ export class RuleGrid extends CoreGrid {
     }
   }
 
+  /** Same independent, non-`CoreGrid`-delegating draw logic as `top()` above, for the right edge. */
   right(g: TransElement): void {
     const width = this.axis.area("width");
     const halfWidth = width / 2;
@@ -447,6 +457,10 @@ export class RuleGrid extends CoreGrid {
     }
   }
 
+  /** Overrides `CoreGrid.wrapper()` (identity there) so index-based scale lookups can resolve
+   * through a configured `grid.key` field instead of a raw index - same shape/purpose as
+   * `RangeGrid.wrapper()` (looks up `axis.data[i][key]` and passes it through the underlying
+   * scale), returning `scale` unwrapped when `key` is not set. */
   wrapper(scale: any, key?: string): any {
     const oldScale = scale;
     const self = this;
@@ -552,6 +566,13 @@ export class RuleGrid extends CoreGrid {
     return domain;
   }
 
+  /** `Draw.render()` lifecycle hook: resolves this grid's `linear()` scale from `initDomain()` and
+   * `getGridSize()` (reversing the pixel range for `"left"`/`"right"` orient, same as
+   * `RangeGrid.drawBefore()`), and caches `start`/`size`/`end`/`step`/`nice`/`ticks`/`values`/`bar`/
+   * `hideZero`/`center` for `top()`/`bottom()`/`left()`/`right()` to read. See header comment for
+   * the real divergences from `RangeGrid.drawBefore()`: no `.clamp()` call at all, and `this.ticks`
+   * is never reversed for left/right orient. In practice this method itself never completes a real
+   * render, since `initDomain()` (bug 2) throws first for the default `domain: null` config. */
   // `drawBefore`/`draw` declared as arrow-function CLASS FIELDS, not method syntax - same
   // TS2425-avoidance convention every other concrete grid subclass in this port already
   // established.
@@ -588,6 +609,9 @@ export class RuleGrid extends CoreGrid {
     }
   };
 
+  /** `Draw.render()` lifecycle hook - but see header comment bug 1: unconditionally throws, always,
+   * in both the original engine and this faithful port. `CoreGrid.drawGrid()`/`top()`/`bottom()`/
+   * `left()`/`right()` are never reached via a real `draw()` call. */
   draw = (): { root: TransElement; scale: any } => {
     // PRESERVED BUG 1 (severe - see header comment): the original's own
     // `this.drawGrid(chart, orient, "rule", grid)` reads three bare, never-declared identifiers

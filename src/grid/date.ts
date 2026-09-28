@@ -159,29 +159,40 @@ export class DateGrid extends CoreGrid {
     moveX: number,
   ) => void;
 
+  /** Draws the `"center"` (z-axis, full-3D) orientation: one z-axis tick per resolved date via the
+   * mixed-in `drawCenter()`, with zero per-tick offset (unlike `BlockGrid.center()`'s
+   * `half_band`), plus the shared base line for this side. */
   center(g: TransElement): void {
     this.drawCenter(g, this.ticks, this.values, null, 0);
     this.drawBaseLine("center", g);
   }
 
+  /** Draws the top-oriented grid: the per-tick background pattern (`drawPattern`), the shared
+   * per-tick draw loop (`CoreGrid.drawTop()`, using `this.ticks`/`this.values` as populated by
+   * `drawBefore()`), and the base line. Unlike `BlockGrid`'s orient methods, there is no extra
+   * trailing boundary tick here - `CoreGrid.drawTop()`'s own `isLast` check applies normally since
+   * `grid.type` is not `"block"`. */
   top(g: TransElement): void {
     this.drawPattern("top", this.ticks, this.values);
     this.drawTop(g, this.ticks, this.values, null, 0);
     this.drawBaseLine("top", g);
   }
 
+  /** Same as `top()` above, for the bottom edge. */
   bottom(g: TransElement): void {
     this.drawPattern("bottom", this.ticks, this.values);
     this.drawBottom(g, this.ticks, this.values, null, 0);
     this.drawBaseLine("bottom", g);
   }
 
+  /** Same as `top()` above, for the left edge (`drawLeft` in place of `drawTop`). */
   left(g: TransElement): void {
     this.drawPattern("left", this.ticks, this.values);
     this.drawLeft(g, this.ticks, this.values, null, 0);
     this.drawBaseLine("left", g);
   }
 
+  /** Same as `left()` above, for the right edge. */
   right(g: TransElement): void {
     this.drawPattern("right", this.ticks, this.values);
     this.drawRight(g, this.ticks, this.values, null, 0);

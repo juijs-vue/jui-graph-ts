@@ -26,6 +26,7 @@
 //    range, but produces `NaN` for a 1-item domain (`_range[1]` is `undefined`, `Math.min(x,
 //    undefined) === NaN`).
 
+/** The callable scale object returned by `ordinal()` - see its doc comment. */
 export interface OrdinalScale {
   (t: string | number): number | null
   domain(): (string | number)[]

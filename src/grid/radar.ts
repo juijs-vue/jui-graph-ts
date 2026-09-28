@@ -246,6 +246,8 @@ export class RadarGrid extends CoreGrid {
     return domain;
   }
 
+  /** `Draw.render()` lifecycle hook: resolves this grid's per-spoke label `domain` via
+   * `initDomain()`, ahead of `draw()`'s own layout pass. */
   drawBefore = (): void => {
     this.domain = this.initDomain();
   };

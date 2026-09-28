@@ -15,6 +15,7 @@ import { PolyElement } from "./svg/element.poly";
 
 type Attr = Record<string, any> | null | undefined;
 
+/** A plain-object description of an element tree, as consumed by `SVG.createObject()`. */
 interface CreateObjectSpec {
   type: string;
   attr?: Attr;
@@ -229,6 +230,11 @@ export class SVG extends SVG3d {
     }
   }
 
+  /**
+   * Like `clear()` but also discards the underlying `children` array(s) afterwards (`main`'s
+   * always, `sub`'s only when `isAll` is true) rather than just detaching the DOM nodes - used
+   * when starting a fresh render pass that will rebuild the element tree from scratch.
+   */
   reset(isAll?: boolean): void {
     this.clear(isAll);
     this.mainGroup.children = [];

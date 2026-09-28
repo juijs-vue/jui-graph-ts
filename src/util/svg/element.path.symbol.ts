@@ -12,6 +12,11 @@ export interface SymbolTemplates {
   circle: string;
 }
 
+/**
+ * A `PathElement` specialized for drawing small marker symbols (triangle/rect/cross/circle) via
+ * its own `add()`/`join()` pair rather than the inherited path-command buffer - see `join()`'s
+ * doc comment for a real, preserved bug this split causes.
+ */
 export class PathSymbolElement extends PathElement {
   // A SEPARATE accumulator from `PathElement`'s own private `orders` array - see the `join()`
   // override doc comment below for why this matters.
@@ -73,21 +78,26 @@ export class PathSymbolElement extends PathElement {
   // (see the `join()` doc comment above for why that data is, in practice, never actually
   // flushed to the `d` attribute by this class's own `join()`).
 
+  /** Draws a triangle centered at `(cx, cy)`. See the class doc comment: its commands land in the inherited `PathElement` buffer, which this class's `join()` never flushes. */
   triangle(cx: number, cy: number, width: number, height: number): this {
     return this.MoveTo(cx, cy).moveTo(0, -height / 2).lineTo(width / 2, height).lineTo(-width, 0).lineTo(width / 2, -height);
   }
 
+  /** Draws a rectangle centered at `(cx, cy)`. See the class doc comment: its commands land in the inherited `PathElement` buffer, which this class's `join()` never flushes. */
   rect(cx: number, cy: number, width: number, height: number): this {
     return this.MoveTo(cx, cy).moveTo(-width / 2, -height / 2).lineTo(width, 0).lineTo(0, height).lineTo(-width, 0).lineTo(0, -height);
   }
+  /** Alias for `rect()`. */
   rectangle(cx: number, cy: number, width: number, height: number): this {
     return this.rect(cx, cy, width, height);
   }
 
+  /** Draws an X/cross centered at `(cx, cy)`. See the class doc comment: its commands land in the inherited `PathElement` buffer, which this class's `join()` never flushes. */
   cross(cx: number, cy: number, width: number, height: number): this {
     return this.MoveTo(cx, cy).moveTo(-width / 2, -height / 2).lineTo(width, height).moveTo(0, -height).lineTo(-width, height);
   }
 
+  /** Draws a circle of radius `r` centered at `(cx, cy)`, as two arcs. See the class doc comment: its commands land in the inherited `PathElement` buffer, which this class's `join()` never flushes. */
   circle(cx: number, cy: number, r: number): this {
     return this.MoveTo(cx, cy).moveTo(-r, 0).arc(r / 2, r / 2, 0, 1, 1, r, 0).arc(r / 2, r / 2, 0, 1, 1, -r, 0);
   }

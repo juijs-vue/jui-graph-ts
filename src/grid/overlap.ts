@@ -63,6 +63,11 @@ export class OverlapGrid extends CoreGrid {
     }
   }
 
+  /** `Draw.render()` lifecycle hook: builds this grid's `scale` as an index-based function
+   * producing `size` (`grid.count`, or `axis.data.length`, or `1`) concentric rects - the full
+   * axis-area rect at `i = 0`, shrinking symmetrically toward the area's center as `i` approaches
+   * `size` - the geometry `custom()` above iterates over, per row, before discarding every result
+   * (see `custom()`'s own doc comment for why nothing ends up rendered). */
   drawBefore = (): void => {
     const size = (this.grid.count as number | undefined) || this.axis.data.length || 1;
     const widthUnit = this.axis.area("width") / 2 / size;

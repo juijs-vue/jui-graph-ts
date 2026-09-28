@@ -72,6 +72,7 @@ export class Element {
     this.attr(attr as any);
   }
 
+  /** Invokes `callback` (with `this`/2nd arg bound to the child) for each direct child, in order. */
   each(callback: (this: Element, index: number, child: Element) => void): Element[] | undefined {
     if (typeof callback !== "function") return;
 
@@ -83,6 +84,7 @@ export class Element {
     return this.children;
   }
 
+  /** Returns the direct child at `index`, or `null` if there isn't one. */
   get(index: number): Element | null {
     if (this.children[index]) {
       return this.children[index];
@@ -91,6 +93,7 @@ export class Element {
     return null;
   }
 
+  /** Returns `obj`'s position among this element's direct children, or `-1` if it isn't one. */
   index(obj: Element): number {
     for (let i = 0; i < this.children.length; i++) {
       if (obj === this.children[i]) {
@@ -101,6 +104,7 @@ export class Element {
     return -1;
   }
 
+  /** Appends `elem` as this element's last child, detaching it from any prior parent first. */
   append(elem: Element): this {
     if (elem instanceof Element) {
       if (elem.parent) {
@@ -114,10 +118,12 @@ export class Element {
     return this;
   }
 
+  /** Inserts `elem` as this element's first child (shorthand for `insert(0, elem)`). */
   prepend(elem: Element): this {
     return this.insert(0, elem);
   }
 
+  /** Inserts `elem` as a direct child at `index`, detaching it from any prior parent first. */
   insert(index: number, elem: Element): this {
     if (elem.parent) {
       elem.remove();
@@ -185,6 +191,7 @@ export class Element {
     return this;
   }
 
+  /** Merges `css` properties into this element's tracked style map, then writes them all as a single `style` attribute (`"key:value;..."`). */
   css(css: Record<string, any>): this {
     const list: string[] = [];
 
@@ -230,6 +237,7 @@ export class Element {
     return this;
   }
 
+  /** Attaches a `type` DOM event listener to the underlying SVG element, tracked so `off()` can remove it later. A missing/non-function `handler` is silently accepted as a no-op listener. */
   on(type: string, handler?: (this: SVGElement, e: Event) => void): this {
     const callback = function (this: SVGElement, e: Event) {
       if (typeof handler === "function") {
@@ -243,6 +251,7 @@ export class Element {
     return this;
   }
 
+  /** Removes previously-`on()`-attached listeners: all of them if `type` is omitted, or only those registered for `type`. */
   off(type?: string): this {
     if (!type) {
       for (let i = 0, len = this.events.length; i < len; i++) {
@@ -269,6 +278,7 @@ export class Element {
     return this;
   }
 
+  /** Attaches `mouseover`/`mouseout` listeners (each tracked for `off()`, like `on()`). Either handler may be omitted. */
   hover(overHandler?: (this: SVGElement, e: Event) => void, outHandler?: (this: SVGElement, e: Event) => void): this {
     const callback1 = function (this: SVGElement, e: Event) {
       if (typeof overHandler === "function") {

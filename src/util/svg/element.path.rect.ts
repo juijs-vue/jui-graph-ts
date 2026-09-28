@@ -4,6 +4,7 @@
 import { PathElement } from "./element.path";
 import { registerElementModule } from "./element";
 
+/** A `PathElement` specialized for building a single rounded-rectangle `<path>`. */
 export class PathRectElement extends PathElement {
   /**
    * Builds (and immediately joins) a rounded-rect path, one corner radius per side

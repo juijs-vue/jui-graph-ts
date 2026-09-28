@@ -15,6 +15,7 @@ function createId(key?: string): string {
   return [key || "id", +new Date(), Math.round(Math.random() * 100) % 100].join("-");
 }
 
+/** Adds composite "pseudo-3D" shape builders (`rect3d`/`cylinder3d`) on top of `SVGBase`'s plain 2D tags. */
 export class SVG3d extends SVGBase {
   /**
    * Draws a 2.5D "extruded rectangle" (three shaded faces: top, front, side) as a `<g>` of

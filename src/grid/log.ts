@@ -82,6 +82,14 @@ export interface LogGridOptions extends RangeGridOptions {
 export class LogGrid extends RangeGrid {
   declare grid: LogGridOptions;
 
+  /** `Draw.render()` lifecycle hook: fully replaces (not extends) `RangeGrid.drawBefore()` -
+   * resolves a `log()`-based scale (instead of `linear()`) from the inherited `initDomain()`, sets
+   * up its range (reversed for `"left"`/`"right"` orient, same as `RangeGrid`), and computes
+   * `this.ticks`/`this.values` from it. See header comment quirks 1-3 for the three real
+   * divergences from `RangeGrid.drawBefore()`: `grid.unit` is forced to `false` before
+   * `initDomain()` even runs (silently discarding any configured numeric/function `unit`), the
+   * scale is never `.clamp()`-ed, and `this.step` is read directly from the raw `grid.step` config
+   * rather than `initDomain()`'s own auto-computed `domain.step`. */
   // `drawBefore`/`draw` declared as arrow-function CLASS FIELDS, not method syntax - same
   // TS2425-avoidance convention every other concrete grid subclass in this port already
   // established (`Draw` declares both as optional instance PROPERTIES, matching the original's
@@ -128,6 +136,9 @@ export class LogGrid extends RangeGrid {
     }
   };
 
+  /** `Draw.render()` lifecycle hook: the entry point that actually triggers this grid's SVG
+   * rendering, via `CoreGrid.drawGrid()` (inherited orient dispatch - `top`/`bottom`/`left`/
+   * `right`/`center`/`wrapper` all come from `RangeGrid`, unchanged). */
   draw = (): { root: TransElement; scale: unknown } => {
     // Same dead-string-argument adaptation every other concrete grid's `draw()` already documents
     // (`CoreGrid.drawGrid()` takes zero parameters - the original's own `this.drawGrid("log")`

@@ -125,35 +125,54 @@ export class FullBlockGrid extends CoreGrid {
     moveZ: number,
   ) => void
 
+  /** Draws the `"center"` (z-axis, full-3D) orientation: one z-axis tick per domain item via the
+   * mixed-in `drawCenter()`, with a literal `0` offset (see header comment point 2 - `half_band`
+   * is always `0` for this class anyway, but the original hardcodes the literal regardless), plus
+   * the shared base line for this side. */
   center(g: TransElement): void {
     this.drawCenter(g, this.domain, this.points, null, 0)
     this.drawBaseLine('center', g)
   }
 
+  /** Draws the top-oriented grid: the per-tick background pattern (`drawPattern`), the shared
+   * per-domain-item tick/label loop (`CoreGrid.drawTop()`), and the base line. Unlike
+   * `BlockGrid.top()`, there is no extra trailing boundary tick here - `rangeBands()` (see
+   * `drawBefore()` below) already fills the full axis width with no gap left to bound separately
+   * (header comment point 2). */
   top(g: TransElement): void {
     this.drawPattern('top', this.domain, this.points)
     this.drawTop(g, this.domain, this.points, null, 0)
     this.drawBaseLine('top', g)
   }
 
+  /** Same as `top()` above, for the bottom edge. */
   bottom(g: TransElement): void {
     this.drawPattern('bottom', this.domain, this.points)
     this.drawBottom(g, this.domain, this.points, null, 0)
     this.drawBaseLine('bottom', g)
   }
 
+  /** Same as `top()` above, for the left edge (`drawLeft` in place of `drawTop`). */
   left(g: TransElement): void {
     this.drawPattern('left', this.domain, this.points)
     this.drawLeft(g, this.domain, this.points, null, 0)
     this.drawBaseLine('left', g)
   }
 
+  /** Same as `left()` above, for the right edge. */
   right(g: TransElement): void {
     this.drawPattern('right', this.domain, this.points)
     this.drawRight(g, this.domain, this.points, null, 0)
     this.drawBaseLine('right', g)
   }
 
+  /** Resolves this grid's ordinal domain array from `grid.domain` - byte-identical logic to
+   * `BlockGrid.initDomain()` (see header comment): a string reads that field off each axis data
+   * row (forward, or backward when `grid.reverse` is set), a function is called once with
+   * `this.chart` and returns the whole domain array at once, an array is used as-is, and the
+   * result is then unconditionally reversed again when `grid.reverse` is set - which, exactly as
+   * in `BlockGrid`, makes `reverse` a no-op specifically for the string-domain branch (it already
+   * iterated backward) while genuinely reversing the function/array branches. */
   initDomain(): (string | number)[] {
     let domain: (string | number)[] = []
 
@@ -192,6 +211,13 @@ export class FullBlockGrid extends CoreGrid {
     return domain
   }
 
+  /** Overrides `CoreGrid.wrapper()` (identity there) so index-based scale lookups can resolve
+   * through a configured `grid.key` field instead of a raw index - same purpose as
+   * `BlockGrid.wrapper()`, but see header comment point 3 for a genuine, preserved OFF-BY-ONE
+   * divergence from it: the reverse-index fallback here computes `len - i` (no `- 1`), one past
+   * the last valid domain index for a 0-indexed `ordinal()` scale, vs. `BlockGrid`'s correct
+   * `len - i - 1`. As with `BlockGrid.wrapper()`, this branch is only reachable when `key` is set
+   * but `i` is not a number - not how any real caller in this codebase invokes a grid's scale. */
   wrapper(scale: OrdinalScale, key?: string): OrdinalScale {
     const old_scale = scale
     const self = this
@@ -215,6 +241,11 @@ export class FullBlockGrid extends CoreGrid {
   // `drawBefore`/`draw` declared as arrow-function CLASS FIELDS, not method syntax - see
   // `grid/block.ts`'s identical note (matching `Draw`'s own optional-instance-PROPERTY shape,
   // TS2425 override-kind requirement, not a behavior change).
+  /** `Draw.render()` lifecycle hook: resolves this grid's ordinal scale from `initDomain()` and
+   * `getGridSize()`, laying out full-width, gap-free bands across `[obj.start, obj.end]` via
+   * `rangeBands()` (unlike `BlockGrid.drawBefore()`'s point-based `rangePoints()`), and caches the
+   * resulting `domain`/`points`/`start`/`size`/`end`/`band`/`half_band` (always `0` here)/`bar`/
+   * `reverse` fields for `top()`/`bottom()`/`left()`/`right()`/`center()` to read. */
   drawBefore = (): void => {
     const domain = this.initDomain()
 
@@ -238,6 +269,8 @@ export class FullBlockGrid extends CoreGrid {
     this.reverse = this.grid.reverse ?? false
   }
 
+  /** `Draw.render()` lifecycle hook: the entry point that actually triggers this grid's SVG
+   * rendering, via `CoreGrid.drawGrid()`. */
   draw = (): { root: TransElement; scale: unknown } => {
     // See `grid/block.ts`'s `draw()` for the same dead-argument note (`drawGrid()` never reads
     // any argument - `"fullblock"` was always unused in the original too).

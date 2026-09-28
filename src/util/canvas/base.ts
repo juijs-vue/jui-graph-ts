@@ -16,8 +16,10 @@
 // parameters) - nothing to reuse test values from; verified independently by hand-tracing each
 // method's `context` calls against the original source instead.
 
+/** An `[x, y]` coordinate pair, as consumed by `drawCurve()`/`getCurvePoints()`. */
 export type CurvePoint = readonly [number, number];
 
+/** A wrapper around a `CanvasRenderingContext2D`, providing chart-specific 2D drawing primitives. */
 export class CanvasBase {
   private context: CanvasRenderingContext2D;
 
@@ -25,11 +27,13 @@ export class CanvasBase {
     this.context = context;
   }
 
+  /** Clears the entire canvas (`0,0` to the canvas's own `width`/`height`). */
   clearContext(): void {
     const context = this.context;
     context.clearRect(0, 0, context.canvas.width, context.canvas.height);
   }
 
+  /** Draws a straight solid line from `(x1,y1)` to `(x2,y2)`. `color` defaults to `#434d6b`. */
   drawLine(x1: number, y1: number, x2: number, y2: number, color?: string, lineWidth = 1): void {
     color = color || "#434d6b";
     const context = this.context;
@@ -41,6 +45,10 @@ export class CanvasBase {
     context.stroke();
   }
 
+  /**
+   * Draws a smooth Catmull-Rom-style spline through `points` (see `getCurvePoints()`, which does
+   * the actual math), clamping every interpolated `y` into `[minY, maxY]`.
+   */
   drawCurve(points: CurvePoint[], minY: number, maxY: number, tension = 0.5, isClosed = false, numOfSegments = 16): void {
     const context = this.context;
     context.beginPath();
@@ -56,6 +64,11 @@ export class CanvasBase {
     for (let i = 2; i < ptsa.length - 1; i += 2) context.lineTo(ptsa[i], ptsa[i + 1]);
   }
 
+  /**
+   * Draws a dashed line from `(x1,y1)` to `(x2,y2)` using `dash` as the `setLineDash()` pattern
+   * (default `[3, 3]`), restoring the context's previous dash pattern afterwards. `color`
+   * defaults to `#434d6b`.
+   */
   drawDashedLine(x1: number, y1: number, x2: number, y2: number, color?: string, dash: number[] = [3, 3], lineWidth = 1): void {
     color = color || "#434d6b";
     const context = this.context;
@@ -70,6 +83,7 @@ export class CanvasBase {
     context.setLineDash(originDash);
   }
 
+  /** Draws a connected polyline through each point in `pos`, in order. `color` defaults to `#434d6b`. */
   drawLines(color: string | undefined, ...pos: CurvePoint[]): void {
     color = color || "#434d6b";
     const context = this.context;
@@ -81,6 +95,11 @@ export class CanvasBase {
     context.stroke();
   }
 
+  /**
+   * Traces (but does not fill/stroke) a rounded-rectangle path with a single `radius` shared by
+   * all four corners, from `(x,y)` sized `width` x `height`. Callers apply their own
+   * `fillStyle`/`strokeStyle` and call `fill()`/`stroke()` afterwards.
+   */
   drawRoundRect(x: number, y: number, width: number, height: number, radius: number): void {
     const context = this.context;
     context.beginPath();
@@ -105,6 +124,10 @@ export class CanvasBase {
     context.closePath();
   }
 
+  /**
+   * Fills (and, when `borderColor` is given, also strokes) an arbitrary quadrilateral through
+   * the four `(x,y)` corner pairs, in order. `color` defaults to `#ffffff`.
+   */
   drawFreeRect(
     x1: number,
     y1: number,
@@ -134,6 +157,10 @@ export class CanvasBase {
     context.fill();
   }
 
+  /**
+   * Like `drawFreeRect()` but stroke-only (no fill): outlines an arbitrary quadrilateral through
+   * the four `(x,y)` corner pairs, in order. `color` defaults to `#ffffff`.
+   */
   drawFreeRectStroke(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, x4: number, y4: number, color?: string): void {
     color = color || "#ffffff";
     const context = this.context;
@@ -147,6 +174,10 @@ export class CanvasBase {
     context.stroke();
   }
 
+  /**
+   * Fills an upward-pointing triangle centered on `(x1,y1)`: apex at `y1-d`, base corners at
+   * `y1+d` spanning `x1-d` to `x1+d`. `color` defaults to `#ffffff`.
+   */
   drawTriangle(x1: number, y1: number, d: number, color?: string): void {
     color = color || "#ffffff";
     const context = this.context;
@@ -159,6 +190,7 @@ export class CanvasBase {
     context.fill();
   }
 
+  /** Fills a `2d`-by-`2d` square centered on `(x1,y1)`. `color` defaults to `#ffffff`. */
   drawSquare(x1: number, y1: number, d: number, color?: string): void {
     color = color || "#ffffff";
     const context = this.context;
@@ -190,6 +222,7 @@ export class CanvasBase {
     throw new ReferenceError("drawFreeRect is not defined");
   }
 
+  /** Fills a full circle centered on `(x,y)` with radius `d` (default `1`). `color` defaults to `white`. */
   drawCircle(x: number, y: number, d?: number, color?: string): void {
     color = color || "white";
     d = d || 1;
@@ -200,6 +233,11 @@ export class CanvasBase {
     context.fill();
   }
 
+  /**
+   * Draws a "bullet" shape: a small solid circle at `(x,y)` fading, via a linear gradient from
+   * opaque `#1074fc` to transparent, into a flat-ended tail `width` pixels long extending to the
+   * right. Used for directional indicator/pointer marks.
+   */
   drawBullet(x: number, y: number, width = 74): void {
     const context = this.context;
     const grd = context.createLinearGradient(x, y, x + width, y);

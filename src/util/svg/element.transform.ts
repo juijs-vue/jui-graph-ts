@@ -5,6 +5,7 @@ import { Element, registerElementModule } from "./element";
 
 type TransformKey = "translate" | "scale" | "rotate" | "skew" | "matrix";
 
+/** An `Element` that also tracks and composes an SVG `transform="..."` attribute. */
 export class TransElement extends Element {
   // Plain object (not a `Map`) so `for...in` iterates in this EXACT declaration order -
   // `applyOrders()` below composes the final `transform` string by iterating these keys in
@@ -33,6 +34,7 @@ export class TransElement extends Element {
     return args.join(",");
   }
 
+  /** Sets/replaces this element's `translate(...)` transform component to `translate(args...)`. */
   translate(...args: unknown[]): this {
     this.transformOrders.translate = "translate(" + TransElement.getStringArgs(args) + ")";
     this.applyOrders();
@@ -61,6 +63,7 @@ export class TransElement extends Element {
     return this;
   }
 
+  /** Sets/replaces this element's `scale(...)` transform component to `scale(args...)`. */
   scale(...args: unknown[]): this {
     this.transformOrders.scale = "scale(" + TransElement.getStringArgs(args) + ")";
     this.applyOrders();
@@ -68,6 +71,7 @@ export class TransElement extends Element {
     return this;
   }
 
+  /** Sets/replaces this element's `skew(...)` transform component to `skew(args...)`. */
   skew(...args: unknown[]): this {
     this.transformOrders.skew = "skew(" + TransElement.getStringArgs(args) + ")";
     this.applyOrders();
@@ -75,6 +79,7 @@ export class TransElement extends Element {
     return this;
   }
 
+  /** Sets/replaces this element's `matrix(...)` transform component to `matrix(args...)`. */
   matrix(...args: unknown[]): this {
     this.transformOrders.matrix = "matrix(" + TransElement.getStringArgs(args) + ")";
     this.applyOrders();

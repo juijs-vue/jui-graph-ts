@@ -142,6 +142,10 @@ export class RangeGrid extends CoreGrid {
     moveZ: number,
   ) => void
 
+  /** Draws the `"center"` (z-axis, full-3D) orientation: one z-axis tick per resolved value via
+   * the mixed-in `drawCenter()`, with an active-tick check that highlights the `0` tick
+   * specifically (but only when `0` isn't also the scale's own `min()`/`max()`, avoiding a
+   * doubled-up highlight at the domain's own edge), plus the shared base line for this side. */
   center(g: TransElement): void {
     const min = (this.scale as LinearScale).min()
     const max = (this.scale as LinearScale).max()
@@ -156,6 +160,10 @@ export class RangeGrid extends CoreGrid {
     this.drawBaseLine('center', g)
   }
 
+  /** Draws the top-oriented grid: the per-tick background pattern (`drawPattern`), the shared
+   * per-tick draw loop (`CoreGrid.drawTop()`, using `this.ticks`/`this.values` as populated by
+   * `drawBefore()`) with the same `0`-tick active-highlight check as `center()` above, and the
+   * base line. */
   top(g: TransElement): void {
     this.drawPattern('top', this.ticks, this.values)
     const min = (this.scale as LinearScale).min()
@@ -165,6 +173,7 @@ export class RangeGrid extends CoreGrid {
     this.drawBaseLine('top', g)
   }
 
+  /** Same as `top()` above, for the bottom edge. */
   bottom(g: TransElement): void {
     this.drawPattern('bottom', this.ticks, this.values)
     const min = (this.scale as LinearScale).min()
@@ -174,6 +183,7 @@ export class RangeGrid extends CoreGrid {
     this.drawBaseLine('bottom', g)
   }
 
+  /** Same as `top()` above, for the left edge (`drawLeft` in place of `drawTop`). */
   left(g: TransElement): void {
     this.drawPattern('left', this.ticks, this.values)
     const min = (this.scale as LinearScale).min()
@@ -183,6 +193,7 @@ export class RangeGrid extends CoreGrid {
     this.drawBaseLine('left', g)
   }
 
+  /** Same as `left()` above, for the right edge. */
   right(g: TransElement): void {
     this.drawPattern('right', this.ticks, this.values)
     const min = (this.scale as LinearScale).min()
@@ -192,6 +203,13 @@ export class RangeGrid extends CoreGrid {
     this.drawBaseLine('right', g)
   }
 
+  /** Overrides `CoreGrid.wrapper()` (identity there) so index-based scale lookups can resolve
+   * through a configured `grid.key` field instead of a raw index: when `key` is set, wraps `scale`
+   * in a `new_scale(i)` closure that looks up `axis.data[i][key]` and passes that value through the
+   * underlying linear `scale`. Returns `scale` unwrapped when `key` is not set. Unlike
+   * `BlockGrid.wrapper()`/`FullBlockGrid.wrapper()`, there is no numeric-index fallback branch here
+   * at all - `new_scale` always resolves through `key`, faithfully matching the original (which has
+   * no reverse-handling `else` branch for this file). */
   wrapper(scale: LinearScale, key?: string): LinearScale {
     const old_scale = scale
     const self = this
@@ -205,6 +223,19 @@ export class RangeGrid extends CoreGrid {
     return key ? (Object.assign(new_scale, old_scale) as LinearScale) : old_scale
   }
 
+  /** Resolves this grid's `[min, max]` numeric domain (as a `RangeDomain` - the pair plus a
+   * bolt-on `.step` count) from `grid.domain`/`grid.min`/`grid.max`/`grid.unit`/`grid.step`. A
+   * string `grid.domain` reads that field off every axis data row (each value may itself be a
+   * `[min,max]`-shaped array - see header comment quirk 1 for a real, preserved `NaN` bug specific
+   * to this branch); a function is called once per row and may likewise return a value or an
+   * array; an array is used directly as the value list. Whichever source ran (or none, the
+   * min/max-only usage mode - see the inline FIX note below), the result feeds into `unit`
+   * (explicit `grid.unit`, or auto-computed via `div(max-min, step)` and rounded to a "nice"
+   * step), which in turn is walked outward from `0` (via `fixed(unit).plus`/`.minus`) to produce
+   * the final snapped `[end, start]` domain and its `.step` count. See header comment quirk 2 for
+   * an extra, harmless `value_list` length asymmetry between the string- and function-domain
+   * branches, and the inline FIX note for a genuine bug (now fixed, unlike this file's other
+   * preserved quirks) in how a `null`/`undefined` `grid.domain` used to be handled. */
   initDomain(): RangeDomain {
     let domain: RangeDomain = []
     let min = this.grid.min || undefined
@@ -361,6 +392,12 @@ export class RangeGrid extends CoreGrid {
     return domain
   }
 
+  /** `Draw.render()` lifecycle hook: resolves this grid's `linear()` scale from `initDomain()` and
+   * `getGridSize()`, reversing the pixel range to `[obj.end, obj.start]` specifically for
+   * `"left"`/`"right"` orient (unlike `grid/block.ts`'s `BlockGrid`, which never reverses - see
+   * header comment's cross-check note), applies `grid.clamp`, and caches the resulting
+   * `start`/`size`/`end`/`step`/`nice`/`ticks`/`values`/`bar` fields (reversing `ticks` too, for
+   * the same left/right orients) for `top()`/`bottom()`/`left()`/`right()`/`center()` to read. */
   // `drawBefore`/`draw` declared as arrow-function CLASS FIELDS, not method syntax - see
   // `grid/block.ts`'s identical note (matching `Draw`'s own optional-instance-PROPERTY shape,
   // TS2425 override-kind requirement, not a behavior change).
@@ -401,6 +438,8 @@ export class RangeGrid extends CoreGrid {
     }
   }
 
+  /** `Draw.render()` lifecycle hook: the entry point that actually triggers this grid's SVG
+   * rendering, via `CoreGrid.drawGrid()`. */
   draw = (): { root: TransElement; scale: unknown } => {
     // See `grid/block.ts`'s `draw()` for the same dead-argument note (`drawGrid()` never reads
     // any argument - `"range"` was always unused in the original too).

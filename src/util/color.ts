@@ -38,6 +38,7 @@ const {
   colorHash: coreColorHash,
 } = ColorUtil
 
+/** An RGB(A) color, channels `0-255` (`a`, when present, `0-1`). */
 export interface RgbColor {
   r: number
   g: number
@@ -45,6 +46,7 @@ export interface RgbColor {
   a?: number
 }
 
+/** An HSV color: `h` in `0-360` degrees, `s`/`v` in `0-1`. */
 export interface HsvColor {
   h: number
   s: number
@@ -67,6 +69,7 @@ export function format(obj: RgbColor, type?: string): string | RgbColor {
   return obj
 }
 
+/** Strips leading/trailing whitespace. Treats a falsy `str` (e.g. `undefined`) as `''`. */
 export function trim(str: string): string {
   return (str || '').replace(/^\s+|\s+$/g, '')
 }
@@ -80,6 +83,7 @@ export function rgb(str: string | RgbColor): RgbColor | string {
   return coreRgb(str) as RgbColor | string
 }
 
+/** The callable scale object returned by `scale()` - see its doc comment. */
 export interface ColorScale {
   (t: number, type?: string): string | RgbColor
   domain(start: string | RgbColor, end: string | RgbColor): ColorScale
@@ -97,6 +101,7 @@ export function scale(): ColorScale {
   return coreScale() as unknown as ColorScale
 }
 
+/** The callable map object exposed as `map` - see its doc comment. */
 export interface ColorMap {
   (colorList: (string | RgbColor)[], count?: number): string[]
   parula(count?: number): string[]
@@ -151,12 +156,14 @@ export function parse(color: string): GradientDescriptor | string {
   return parseGradient(color)
 }
 
+/** Parsed shape of a `linear(...)`/`radial(...)` gradient string, as returned by `parseGradient()`. */
 export interface GradientDescriptor {
   type: string
   attr: LinearAttr | RadialAttr
   children: GradientStop[]
 }
 
+/** SVG `<linearGradient>` attributes, as computed by `parseAttr('linear', ...)`. */
 export interface LinearAttr {
   x1: number
   y1: number
@@ -165,6 +172,7 @@ export interface LinearAttr {
   direction?: string
 }
 
+/** SVG `<radialGradient>` attributes, as computed by `parseAttr('radial', ...)`. */
 export interface RadialAttr {
   cx: number
   cy: number
@@ -287,6 +295,17 @@ export function parseStop(stop: string): GradientStop[] {
   return stops
 }
 
+/**
+ * Parses a gradient's direction/coordinate segment (the part between the parens in
+ * `linear(...)`/`radial(...)`) into SVG gradient attributes.
+ *
+ * For `type === 'linear'`, a handful of named directions (`'left'`/`'right'`/`'top'`/`'bottom'`/
+ * `'top left'`/`'top right'`/`'bottom left'`/`'bottom right'`, or `''` which behaves like
+ * `'left'`) map to fixed `{x1,y1,x2,y2}` corners; anything else is parsed as a raw
+ * `"x1,y1,x2,y2"` comma list (percent values, e.g. `"50%"`, are kept as strings; plain numbers
+ * are `parseFloat`'d). For any other `type` (i.e. `'radial'`), `str` is always parsed as a raw
+ * `"cx,cy,r,fx,fy"` comma list the same way.
+ */
 export function parseAttr(type: string, str: string): LinearAttr | RadialAttr {
   if (type == 'linear') {
     switch (str) {
