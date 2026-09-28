@@ -93,13 +93,54 @@ interface Rotatable {
 export class Draw {
   // Populated externally post-construction (see header comment) - not set by this constructor,
   // matching the original's parameterless `var Draw = function() {}`.
+
+  /** The owning `Builder` instance (`base/builder.ts`'s `drawBrush()`/`drawWidget()` both set this
+   * to `this` right after construction) - narrowed here to only what `render()`/`calculate3d()`
+   * need (`on()`, `axis(index)`, `format?`); a concrete subclass typically re-types this more
+   * widely (e.g. `CoreBrush`'s own `chart: BrushChart`, which also exposes `theme()`/`color()`). */
   chart!: DrawChartLike;
+  /** The specific `Axis` instance (one axis GROUP - a single entry of the chart's `axis` array)
+   * this brush/widget/grid was configured against, set from `builder.ts`'s own per-group loop.
+   * Gives access to that group's own scales (`x`/`y`/`z`/`c`), `data`, `area(key)`, and the 3D
+   * projection state (`depth`/`degree`/`perspective`) `calculate3d()` reads - narrowed here to
+   * just that subset. */
   axis!: DrawAxisLike;
+  /** **Declared but never actually populated for a brush/widget instance** - `builder.ts`'s
+   * `drawBrush()`/`drawWidget()` never assign `draw.grid` (confirmed by reading both in full; only
+   * `chart`/`axis`/`brush-or-widget`/`svg`/`canvas` are set there). A grid TYPE's own concrete
+   * class (e.g. `CoreGrid`'s subclasses) reads its own config a different way, and a brush/widget
+   * that needs the active grid config for its axis group should read `this.axis.get(...)` or the
+   * axis's own resolved fields instead of this field - kept only for structural parity with the
+   * original untyped engine, which also never wrote to the equivalent property on these instance
+   * kinds. */
   grid: any;
+  /** The brush's own resolved config object (its `XxxBrushOptions` fields, defaults already
+   * merged in) - set by `builder.ts`'s `drawBrush()` to that array entry, one per registered
+   * `chart.brush.*` instance. Stays `undefined` on a widget/grid instance (never assigned there). */
   brush: any;
+  /** The widget's own resolved config object - same shape/assignment as `brush` above, but set by
+   * `drawWidget()` for a registered `chart.widget.*` instance instead. Stays `undefined` on a
+   * brush/grid instance. */
   widget: any;
+  /** **Declared but never actually populated for a brush/widget instance**, same situation as
+   * `grid` above - the real per-axis-group map engine lives on `this.axis.map` (a real `Map`
+   * instance, set by `Axis`'s own `drawMapType()`/`reload()`), which is what every registered
+   * `chart.brush.map.*`/`chart.widget.map.*` type actually reads (e.g.
+   * `register/brush/map/bubble.ts`'s own `(this.axis as ...).map(id)` calls) - not this field. */
   map: any;
+  /** The shared `SVG` builder handle (`util/svg.ts`) used to construct this draw target's own
+   * elements - every `this.svg.rect(...)`/`.circle(...)`/`.path(...)`/`.group(...)`/etc. call a
+   * concrete brush/widget/grid makes goes through this. Set to the SAME `Builder.svg` instance for
+   * every brush/widget on the chart (`builder.ts`'s `drawBrush()`/`drawWidget()` both assign
+   * `draw.svg = this.svg`) - not a private, per-target sub-SVG. */
   svg: any;
+  /** The shared 2D canvas rendering context for this draw target's own layer, when the chart was
+   * mounted with `canvas: true` (`Builder.setup()`'s default: `false`) - `null`/`undefined`
+   * otherwise. Only meaningful for a `chart.brush.canvas.*`/`chart.widget.canvas.*`-family type.
+   * A brush gets the double-buffered `buffer` canvas context (`builder.ts`'s `drawBrush()`:
+   * `draw.canvas = this._canvas.buffer`); a widget gets the separate `sub` canvas context
+   * (`drawWidget()`: `draw.canvas = this._canvas.sub`) - the two draw kinds never share the same
+   * canvas layer. */
   canvas: any;
 
   // Subclasses are expected to define these (see header comment) - `Draw` itself never assigns
