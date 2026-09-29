@@ -37,7 +37,18 @@ export interface LinearScale {
   ticks(count?: number, isNice?: boolean, intNumber?: number, reverse?: boolean): number[]
 }
 
-/** Creates a linear numeric scale (`domain` -> `range`, both `[start, end]`, either order). */
+/** Creates a linear numeric scale (`domain` -> `range`, both `[start, end]`, either order).
+ *
+ * FIXED (was a real bug, shared with `../scale.ts`'s own embedded `linear()` - see that copy's doc
+ * comment for the full writeup, including why it was reachable and why it's fixed here rather than
+ * left preserved): the out-of-domain extrapolation branches used to always add/subtract a strictly
+ * non-negative rate, which is only correct for an ASCENDING `range` - for a DESCENDING one (e.g. a
+ * left/right-orient grid's pixel range) it extrapolated backwards, toward the wrong edge. Fixed by
+ * reusing the exact same signed linear formula the in-domain branch already uses (`pos =
+ * (x-domain[0])/distDomain; callFunction(pos)`), which is correct for any domain/range direction
+ * and for any `x`, in-domain or not - the two out-of-domain branches now only decide whether to
+ * clamp first, not how to interpolate. Byte-identical to the real upstream engine before this fix,
+ * not a port regression. */
 export function linear(): LinearScale {
   let _domain = [0, 1]
   let _range = [0, 1]
@@ -55,12 +66,7 @@ export function linear(): LinearScale {
   let domainMin: number = null as unknown as number
   let domainMax: number = null as unknown as number
 
-  let rangeMin: number = null as unknown as number
-  let rangeMax: number = null as unknown as number
-
   let distDomain: number = null as unknown as number
-  let distRange: number = null as unknown as number
-  let rate = 0
 
   // Also starts `null`; unlike the numeric fields above, calling a still-null `callFunction`
   // throws (matching the original - `.range()` must be called before the scale is invoked).
@@ -72,19 +78,15 @@ export function linear(): LinearScale {
       if (_isClamp) {
         return func(domainMax)
       }
-
-      return _range[0] + Math.abs(x - _domain[0]) * rate
     } else if (domainMin > x) {
       if (_isClamp) {
         return func(domainMin)
       }
-
-      return _range[0] - Math.abs(x - _domain[0]) * rate
-    } else {
-      const pos = (x - _domain[0]) / distDomain
-
-      return callFunction!(pos)
     }
+
+    const pos = (x - _domain[0]) / distDomain
+
+    return callFunction!(pos)
   }) as LinearScale
 
   func.cache = () => _cache
@@ -136,13 +138,6 @@ export function linear(): LinearScale {
 
     roundFunction = interpolateRound(_range[0], _range[1])
     numberFunction = interpolateNumber(_range[0], _range[1])
-
-    rangeMin = func.rangeMin()
-    rangeMax = func.rangeMax()
-
-    distRange = Math.abs(rangeMax - rangeMin)
-
-    rate = distRange / distDomain
 
     callFunction = _isRound ? roundFunction : numberFunction
 

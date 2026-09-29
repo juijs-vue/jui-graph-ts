@@ -281,7 +281,29 @@ export interface LinearScale {
   ticks(count?: number, isNice?: boolean, intNumber?: number, reverse?: boolean): number[]
 }
 
-/** See `./scale/linear.ts`'s `linear()` - identical algorithm, duplicated here in the original. */
+/** See `./scale/linear.ts`'s `linear()` - identical algorithm, duplicated here in the original.
+ *
+ * FIXED (was a real bug, found while debugging `grid/rule.ts`'s gallery demo - see `./scale/
+ * linear.ts`'s doc comment for the full writeup of the bug itself and the fix, identical here):
+ * `func(x)`'s two out-of-domain (extrapolation) branches used to always ADD/SUBTRACT a strictly
+ * non-negative `rate` to/from `_range[0]`, which is only correct when `_range` is ASCENDING. When
+ * `_range` is DESCENDING (e.g. `grid/rule.ts`'s own left/right-orient `range([obj.end, obj.start])`)
+ * the sign used to be backwards. Unclamped (`RuleGrid` never calls `.clamp()` at all - see
+ * `grid/rule.ts`'s header comment) + an out-of-domain lookup + a descending range is exactly what
+ * `RuleGrid` hits whenever a value axis's `axis.y(0)` zero-baseline falls outside the resolved
+ * (min-snapped-to-data, not 0) domain - a real `ColumnBrush`'s `zeroY` used to land on the WRONG
+ * side of the plot entirely, silently inverting which bars looked taller. `RangeGrid` shares the
+ * exact same `linear()` and the exact same descending-range setup for left/right orient, but
+ * defaults to `clamp: true` (`RangeGrid.drawBefore()` DOES call `.clamp(this.grid.clamp)`), which
+ * reroutes both branches to `func(domainMax)`/`func(domainMin)` instead (a same-side, in-domain
+ * lookup) - so no real `RangeGrid` demo was ever able to observe this. Byte-identical to the real
+ * upstream engine before this fix, not a port regression - fixed here (not left preserved) because
+ * it's a genuine algorithm bug with no plausible caller anyone could be relying on (an inverted
+ * extrapolation direction isn't a "quirk" a real chart's layout could have been tuned around), not
+ * a single grid's isolated defect. Fixed by reusing the exact same signed linear formula the
+ * in-domain branch already uses (`pos = (x-domain[0])/distDomain; callFunction(pos)`), correct for
+ * any domain/range direction and any `x`, in-domain or not - the two out-of-domain branches now
+ * only decide whether to clamp first, not how to interpolate. */
 export function linear(): LinearScale {
   let _domain = [0, 1]
   let _range = [0, 1]
@@ -295,12 +317,7 @@ export function linear(): LinearScale {
   let domainMin: number = null as unknown as number
   let domainMax: number = null as unknown as number
 
-  let rangeMin: number = null as unknown as number
-  let rangeMax: number = null as unknown as number
-
   let distDomain: number = null as unknown as number
-  let distRange: number = null as unknown as number
-  let rate = 0
 
   let callFunction: ((t: number) => number) | null = null
   let _rangeBand: number | null = null
@@ -310,16 +327,13 @@ export function linear(): LinearScale {
       if (_isClamp) {
         return func(domainMax)
       }
-      return _range[0] + Math.abs(x - _domain[0]) * rate
     } else if (domainMin > x) {
       if (_isClamp) {
         return func(domainMin)
       }
-      return _range[0] - Math.abs(x - _domain[0]) * rate
-    } else {
-      const pos = (x - _domain[0]) / distDomain
-      return callFunction!(pos)
     }
+    const pos = (x - _domain[0]) / distDomain
+    return callFunction!(pos)
   }) as LinearScale
 
   func.cache = () => _cache
@@ -364,10 +378,6 @@ export function linear(): LinearScale {
     roundFunction = interpolateRound(_range[0], _range[1])
     numberFunction = interpolateNumber(_range[0], _range[1])
 
-    rangeMin = func.rangeMin()
-    rangeMax = func.rangeMax()
-    distRange = Math.abs(rangeMax - rangeMin)
-    rate = distRange / distDomain
     callFunction = _isRound ? roundFunction : numberFunction
 
     return this

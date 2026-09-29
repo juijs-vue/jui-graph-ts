@@ -15,10 +15,20 @@ describe('linear scale - core interpolation', () => {
     expect(scale(10)).toBe(100)
   })
 
-  it('extrapolates outside the domain when not clamped (asymmetric formula, matching the original)', () => {
+  it('extrapolates outside the domain when not clamped, for an ascending range', () => {
     const scale = linear().domain([0, 10]).range([0, 100])
     expect(scale(-5)).toBe(-50)
     expect(scale(15)).toBe(150)
+  })
+
+  it('FIXED (was a real bug, see linear()\'s own doc comment): extrapolates in the correct direction for a DESCENDING range too, not just an ascending one', () => {
+    const scale = linear().domain([0, 10]).range([100, 0])
+    // Below domainMin (x=-5): further from domain[1]=10, so further toward range[0]=100's side,
+    // i.e. ABOVE 100 - the old buggy formula returned 50 here (toward range[1]=0 instead).
+    expect(scale(-5)).toBe(150)
+    // Above domainMax (x=15): further toward range[1]=0's side, i.e. BELOW 0 - the old buggy
+    // formula returned 150 here (toward range[0]=100 instead).
+    expect(scale(15)).toBe(-50)
   })
 
   it('clamps to the domain edges when .clamp(true) is set', () => {

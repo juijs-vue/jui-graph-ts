@@ -145,7 +145,14 @@
 //  - Never calls `.clamp(...)` at all (same omission `log.ts`'s own header comment documents for
 //    `LogGrid` - `RuleGrid`'s scale is therefore never clamped either, regardless of any `clamp`
 //    config, since `RuleGridOptions` doesn't even declare a `clamp` field - `RuleGrid.setup()`'s
-//    own literal fields don't include one).
+//    own literal fields don't include one). This used to matter more than it looks: being always
+//    unclamped meant any out-of-domain lookup (e.g. `ColumnBrush`'s `axis.y(0)` zero-baseline,
+//    when 0 falls outside this grid's data-snapped domain) hit `util/scale.ts`'s `linear()`
+//    extrapolation branches directly - which had their own real, previously-undocumented sign bug
+//    for a descending range (this grid's own left/right-orient range is exactly that). FIXED now,
+//    see `util/scale.ts`'s and `util/scale/linear.ts`'s own doc comments for the full writeup -
+//    not a `RuleGrid`-specific fix, but `RuleGrid` was the file that surfaced it (no other grid's
+//    real demo config manages to reach an unclamped out-of-domain lookup).
 //  - Never reverses `this.ticks` for `orient == "left"/"right"` the way `RangeGrid.drawBefore()`
 //    does.
 //  - Sets `this.hideZero = this.grid.hideZero` / `this.center = this.grid.center` - two fields
@@ -518,6 +525,13 @@ export class RuleGrid extends CoreGrid {
    * difference).
    */
   initDomain(): number[] {
+    // NOT a bug (checked while debugging this grid's gallery demo): `|| undefined` treats a
+    // configured `0` the same as "unset", falling through to the data-derived `tempMin`/`tempMax`
+    // below - so `min: 0`/`max: 0` (this grid's own defaults) can never force an actual 0 floor/
+    // ceiling. `RangeGrid.initDomain()` uses the exact same `this.grid.min || undefined` sentinel
+    // (see range.ts), so this is a deliberate, consistent engine-wide convention ("0 means
+    // unconfigured"), not an isolated falsy-check mistake - confirmed byte-identical in the real
+    // upstream `rule.js`/`range.js` too.
     let min = (this.grid.min || undefined) as number | undefined;
     let max = (this.grid.max || undefined) as number | undefined;
     const data = this.data() as Record<string, unknown>[];
