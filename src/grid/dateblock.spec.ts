@@ -125,9 +125,13 @@ describe("DateBlockGrid", () => {
       expect(Array.from(domain)).toEqual([100, 900]);
     });
 
-    it("preserved bug 1 (divergence from DateGrid): string domain with EMPTY data throws TypeError reading data[0][field] - DateGrid's own copy guards this with `data.length > 0`, this copy doesn't", () => {
+    it("fixed (Tier A defect 2): string domain with EMPTY data no longer throws - now guarded with `data.length > 0`, same as DateGrid's own copy of this branch", () => {
       const { g } = makeDateBlockGrid({ domain: "t" }, { data: [] });
-      expect(() => g.initDomain()).toThrow(TypeError);
+      expect(() => g.initDomain()).not.toThrow();
+      // valueList stays [] (the guard skips both pushes); min/max still resolve via
+      // Math.min/max.apply(Math, []) = Infinity/-Infinity here (defect 3, fixed separately below,
+      // is what stops THAT from happening) - this test's own job is only the crash fix.
+      expect(Array.from(g.initDomain())).toEqual([Infinity, -Infinity]);
     });
 
     it("preserved quirk 2 (divergence from DateGrid): fully-default config (domain: null) does NOT throw - Math.min/max.apply(Math, null) resolve to [Infinity, -Infinity] instead of crashing (unlike DateGrid's documented null.length TypeError)", () => {

@@ -34,11 +34,12 @@
 // real, previously-undocumented divergences (Node-cross-checked, not obvious without diffing both
 // files directly)
 // ============================================================================================
-//  1. **The string-domain branch never got `DateGrid.initDomain()`'s `if (data.length > 0)`
-//     guard.** `DateGrid`'s own copy of this branch (see `date.ts`'s header comment) guards
-//     `data[0][field]`/`data[data.length-1][field]` behind a length check; `DateBlockGrid`'s copy
-//     does not - `data[0][field]` on an empty `data` array reads `undefined[field]`, throwing
-//     `TypeError: Cannot read properties of undefined (reading '<field>')`. Node-verified.
+//  1. **FIXED (Tier A defect 2)**: the string-domain branch never got `DateGrid.initDomain()`'s
+//     `if (data.length > 0)` guard. `DateGrid`'s own copy of this branch (see `date.ts`'s header
+//     comment) guards `data[0][field]`/`data[data.length-1][field]` behind a length check;
+//     `DateBlockGrid`'s copy didn't - `data[0][field]` on an empty `data` array read
+//     `undefined[field]`, throwing `TypeError: Cannot read properties of undefined (reading
+//     '<field>')`. Node-verified. Now guarded the same way `DateGrid`'s copy always was.
 //  2. **The final `min`/`max` auto-computation never got `DateGrid.initDomain()`'s
 //     `&& value_list.length > 0` guard either** - but this does NOT crash the way `DateGrid`'s own
 //     (documented) gap does: `Math.min.apply(Math, value_list)` with a `null` `value_list` (the
@@ -188,12 +189,15 @@ export class DateBlockGrid extends DateGrid {
     let valueList: unknown[] = [];
 
     if (typeCheck("string", this.grid.domain)) {
-      // PRESERVED BUG (see header comment 1): no `data.length > 0` guard here, unlike
-      // `DateGrid.initDomain()`'s own copy of this branch - `data[0]`/`data[data.length - 1]` on
-      // an empty array throws `TypeError: Cannot read properties of undefined`.
-      const field = this.grid.domain as string;
-      valueList.push(+(data[0][field] as number));
-      valueList.push(+(data[data.length - 1][field] as number));
+      // FIXED (Tier A defect 2 - was a preserved crash): now guarded with the same
+      // `data.length > 0` check `DateGrid.initDomain()`'s own copy of this branch already has -
+      // previously, `data[0]`/`data[data.length - 1]` on an empty array threw `TypeError: Cannot
+      // read properties of undefined`.
+      if (data.length > 0) {
+        const field = this.grid.domain as string;
+        valueList.push(+(data[0][field] as number));
+        valueList.push(+(data[data.length - 1][field] as number));
+      }
     } else if (typeCheck("function", this.grid.domain)) {
       const domainFn = this.grid.domain as (this: unknown, row: unknown) => unknown;
       let index = data.length;
