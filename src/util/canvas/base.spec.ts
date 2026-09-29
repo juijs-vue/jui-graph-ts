@@ -123,10 +123,36 @@ describe("CanvasBase", () => {
         expect(names).toContain("arc");
     });
 
-    describe("drawPage() (preserved bug)", () => {
-        it("always throws ReferenceError: drawFreeRect is not defined", () => {
-            expect(() => canvasBase.drawPage(10, 0, 0, "#fff")).toThrow(ReferenceError);
-            expect(() => canvasBase.drawPage(10, 0, 0, "#fff")).toThrow("drawFreeRect is not defined");
+    describe("drawPage() (fixed)", () => {
+        it("does not throw, and draws a value x value quad via drawFreeRect at (x1,y1)", () => {
+            // Previously (preserved bug), drawPage() unconditionally threw
+            // `ReferenceError: drawFreeRect is not defined` (a literal reproduction of the
+            // original engine reading a bare, never-declared `drawFreeRect` identifier instead of
+            // `this.drawFreeRect`) before drawing anything at all. Now it actually calls
+            // `this.drawFreeRect(...)`, tracing a `value`-sized square quad with its top-left
+            // corner at `(x1, y1)`.
+            expect(() => canvasBase.drawPage(10, 0, 0, "#fff")).not.toThrow();
+
+            const names = ctx.calls.map((c: any) => c.name);
+            expect(names).toEqual(["beginPath", "moveTo", "lineTo", "lineTo", "lineTo", "closePath", "fill"]);
+            expect(ctx.calls[1].args).toEqual([0, 0]);
+            expect(ctx.calls[2].args).toEqual([10, 0]);
+            expect(ctx.calls[3].args).toEqual([10, 10]);
+            expect(ctx.calls[4].args).toEqual([0, 10]);
+            expect(ctx.fillStyle).toBe("#fff");
+        });
+
+        it("strokes a border when border=true", () => {
+            canvasBase.drawPage(10, 0, 0, "#fff", true);
+            const names = ctx.calls.map((c: any) => c.name);
+            expect(names).toContain("stroke");
+            expect(ctx.strokeStyle).toBeTruthy();
+        });
+
+        it("skips the stroke branch when border=false (default)", () => {
+            canvasBase.drawPage(10, 0, 0, "#fff");
+            const names = ctx.calls.map((c: any) => c.name);
+            expect(names).not.toContain("stroke");
         });
     });
 

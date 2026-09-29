@@ -205,21 +205,28 @@ export class CanvasBase {
   }
 
   /**
-   * **Preserved bug**: calls a bare `drawFreeRect(...)` identifier - NOT `this.drawFreeRect(...)`
-   * - which was never declared as a local variable anywhere in the original file (only ever
-   * assigned as `this.drawFreeRect`). Every real invocation of `drawPage()` therefore throws
-   * `ReferenceError: drawFreeRect is not defined` before it draws anything - confirmed by literal
-   * transcription, not merely inferred from reading the code once (even setting that aside, the
-   * call also passes an extra leading `context` argument `drawFreeRect`'s real 10-parameter
-   * signature doesn't have, so it would be mis-shifted even if the reference did resolve).
-   * Reading a truly undeclared identifier throws on read in BOTH strict and sloppy mode - a
-   * different, still-valid category from `math.ts`'s `niceNum()` and `element.ts`'s `is()`, both
-   * of which were previously mis-diagnosed as this kind of bug and have since been corrected (see
-   * each file's own header comment) - reproduced here as a literal throw rather than silently
-   * wired up to call `this.drawFreeRect(...)` correctly.
+   * Fills (and, when `border` is true, also strokes) a `value`-by-`value` square quad with its
+   * top-left corner at `(x1, y1)`, via `drawFreeRect()`.
+   *
+   * **Fixed (Tier A - crash defect)**: used to call a bare `drawFreeRect(...)` identifier - NOT
+   * `this.drawFreeRect(...)` - which was never declared as a local variable anywhere in the
+   * original file (only ever assigned as `this.drawFreeRect`). Every real invocation of
+   * `drawPage()` therefore threw `ReferenceError: drawFreeRect is not defined` unconditionally,
+   * before drawing anything at all - confirmed by literal transcription, not merely inferred from
+   * reading the code once (even setting that aside, the call also passed an extra leading
+   * `context` argument `drawFreeRect`'s real 10-parameter signature doesn't have, so it would
+   * have been mis-shifted even if the reference did resolve). No plausible demo could be relying
+   * on `drawPage()` always throwing, so this now actually calls `this.drawFreeRect(...)`. Design
+   * decision (the original's exact corner geometry isn't recoverable from this port - no
+   * original source for this exact method was available to cross-check against): treats `value`
+   * as the quad's side length and `(x1, y1)` as its top-left corner, matching the "value + origin
+   * point" shape of `drawPage()`'s own parameter list and `drawSquare()`'s sibling corner-based
+   * convention elsewhere in this class; `border` toggles passing `color` through as
+   * `drawFreeRect()`'s `borderColor` too (stroke + fill in the same color) instead of `null`
+   * (fill only).
    */
-  drawPage(_value: number, _x1: number, _y1: number, _color?: string, _border = false): void {
-    throw new ReferenceError("drawFreeRect is not defined");
+  drawPage(value: number, x1: number, y1: number, color?: string, border = false): void {
+    this.drawFreeRect(x1, y1, x1 + value, y1, x1 + value, y1 + value, x1, y1 + value, color, border ? color || "#ffffff" : null);
   }
 
   /** Fills a full circle centered on `(x,y)` with radius `d` (default `1`). `color` defaults to `white`. */
