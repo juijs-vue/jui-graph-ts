@@ -125,20 +125,27 @@ describe("DateBlockGrid", () => {
       expect(Array.from(domain)).toEqual([100, 900]);
     });
 
-    it("fixed (Tier A defect 2): string domain with EMPTY data no longer throws - now guarded with `data.length > 0`, same as DateGrid's own copy of this branch", () => {
+    it("fixed (Tier A defects 2+3): string domain with EMPTY data no longer throws - now guarded with `data.length > 0`, and no longer resolves to Infinity/-Infinity either (defect 3's `valueList.length > 0` guard)", () => {
       const { g } = makeDateBlockGrid({ domain: "t" }, { data: [] });
       expect(() => g.initDomain()).not.toThrow();
-      // valueList stays [] (the guard skips both pushes); min/max still resolve via
-      // Math.min/max.apply(Math, []) = Infinity/-Infinity here (defect 3, fixed separately below,
-      // is what stops THAT from happening) - this test's own job is only the crash fix.
-      expect(Array.from(g.initDomain())).toEqual([Infinity, -Infinity]);
+      expect(Array.from(g.initDomain())).toEqual([undefined, undefined]);
     });
 
-    it("preserved quirk 2 (divergence from DateGrid): fully-default config (domain: null) does NOT throw - Math.min/max.apply(Math, null) resolve to [Infinity, -Infinity] instead of crashing (unlike DateGrid's documented null.length TypeError)", () => {
-      const { g } = makeDateBlockGrid({ domain: null, min: null, max: null });
+    it("fixed (Tier A defect 3): fully-default config (domain: null) with real axis.data auto-computes [min, max] from it, instead of silently resolving to Infinity/-Infinity", () => {
+      const { g } = makeDateBlockGrid({ domain: null, min: null, max: null }, { data: [500, 100, 900] });
       const domain = g.initDomain();
-      expect(domain[0]).toBe(Infinity);
-      expect(domain[1]).toBe(-Infinity);
+      expect(domain[0]).toBe(100);
+      expect(domain[1]).toBe(900);
+    });
+
+    it("fixed (Tier A defect 3): fully-default config with EMPTY axis.data leaves min/max undefined, not Infinity/-Infinity", () => {
+      const { g } = makeDateBlockGrid({ domain: null, min: null, max: null }, { data: [] });
+      const domain = g.initDomain();
+      expect(domain[0]).toBeUndefined();
+      expect(domain[1]).toBeUndefined();
+      expect(Number.isFinite(domain[0])).toBe(false);
+      expect(domain[0]).not.toBe(Infinity);
+      expect(domain[1]).not.toBe(-Infinity);
     });
 
     it("function domain: unary + coercion IS applied to scalar return values (divergence from DateGrid's own copy of this branch, which has no unary +)", () => {

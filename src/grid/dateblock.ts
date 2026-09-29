@@ -40,17 +40,20 @@
 //     `DateBlockGrid`'s copy didn't - `data[0][field]` on an empty `data` array read
 //     `undefined[field]`, throwing `TypeError: Cannot read properties of undefined (reading
 //     '<field>')`. Node-verified. Now guarded the same way `DateGrid`'s copy always was.
-//  2. **The final `min`/`max` auto-computation never got `DateGrid.initDomain()`'s
-//     `&& value_list.length > 0` guard either** - but this does NOT crash the way `DateGrid`'s own
-//     (documented) gap does: `Math.min.apply(Math, value_list)` with a `null` `value_list` (the
-//     fully-default-config case, where the "else" branch sets `value_list = this.grid.domain` =
-//     `null`) does NOT throw - `Function.prototype.apply(thisArg, argsList)` treats a `null`/
-//     `undefined` `argsList` as "call with zero arguments" (Node-verified: `Math.min.apply(Math,
-//     null) === Infinity`, `Math.max.apply(Math, null) === -Infinity`). So a fully-default-config
-//     `DateBlockGrid` does NOT crash in `initDomain()` the way a fully-default-config `DateGrid`
-//     does - it silently resolves to `domain = [Infinity, -Infinity]` instead (still nonsensical,
-//     just non-crashing). A real, previously-undocumented DIVERGENCE between the two files' shared-
-//     looking logic, not merely a repeated bug.
+//  2. **FIXED (Tier A defect 3)**: the final `min`/`max` auto-computation never got
+//     `DateGrid.initDomain()`'s `&& value_list.length > 0` guard either - and, unlike `DateGrid`'s
+//     own (also now-fixed) crash, this one didn't crash: `Math.min.apply(Math, value_list)` with a
+//     `null` `value_list` (the fully-default-config case, where the old "else" branch set
+//     `value_list = this.grid.domain` = `null`) doesn't throw - `Function.prototype.apply(thisArg,
+//     argsList)` treats a `null`/`undefined` `argsList` as "call with zero arguments"
+//     (Node-verified: `Math.min.apply(Math, null) === Infinity`, `Math.max.apply(Math, null) ===
+//     -Infinity`). So a fully-default-config `DateBlockGrid` never crashed in `initDomain()` the
+//     way a fully-default-config `DateGrid` used to - it silently resolved to
+//     `domain = [Infinity, -Infinity]` instead (still nonsensical, just non-crashing). Now: the
+//     null-domain "else" branch auto-computes `valueList` from `axis.data` directly (same fix as
+//     `DateGrid.initDomain()`'s defect 1) and the final computation is guarded by
+//     `valueList.length > 0`, so `min`/`max` stay `undefined` instead of resolving to
+//     `Infinity`/`-Infinity` when there's nothing to compute from.
 // Also, independent of both of the above: the function-domain branch's `+value`/`+Math.max.apply
 // (...)`/`+Math.min.apply(...)` unary-`+` coercions ARE present here (unlike `DateGrid`'s own copy
 // of this same branch, which has no unary `+` at all - see `date.ts`) - confirmed by direct
@@ -213,16 +216,25 @@ export class DateBlockGrid extends DateGrid {
           valueList[index] = +(value as number);
         }
       }
-    } else {
+    } else if (this.grid.domain != null) {
       valueList = this.grid.domain as unknown[];
+    } else {
+      // FIX (Tier A defect 3, see doc comment below): `grid.domain` left at its default `null` -
+      // auto-compute straight from `axis.data`'s own raw values instead of leaving `valueList`
+      // `null`, same fix as `DateGrid.initDomain()`'s own defect-1 fix (see `date.ts`).
+      valueList = data.map((row) => +(row as unknown as number));
     }
 
-    // PRESERVED QUIRK (see header comment 2): no `valueList.length > 0` guard, unlike
-    // `DateGrid.initDomain()`'s own copy - but `Math.min.apply`/`Math.max.apply` tolerate a
-    // `null` `valueList` gracefully (treated as zero arguments), so this resolves to
-    // `[Infinity, -Infinity]` rather than crashing, for a fully-default-config grid.
-    if (typeCheck("undefined", min)) min = Math.min.apply(Math, valueList as number[]);
-    if (typeCheck("undefined", max)) max = Math.max.apply(Math, valueList as number[]);
+    // FIXED (Tier A defect 3 - was a preserved quirk): now guarded with `valueList.length > 0`,
+    // same as `DateGrid.initDomain()`'s own copy - previously, a fully-default-config grid (no
+    // explicit domain/min/max) left `valueList` as `null` (or, since the fix above, an empty `[]`
+    // for an empty `axis.data`), and `Math.min.apply`/`Math.max.apply` tolerate that "gracefully"
+    // (`Function.prototype.apply` treats a `null`/empty `argsList` as zero arguments) by silently
+    // resolving to `Infinity`/`-Infinity` - not a crash, but nonsense bounds poisoning every
+    // downstream consumer. Now: `min`/`max` simply stay `undefined` when there's no real value
+    // list to compute from, matching `DateGrid.initDomain()`'s own (now-fixed) behavior exactly.
+    if (typeCheck("undefined", min) && valueList.length > 0) min = Math.min.apply(Math, valueList as number[]);
+    if (typeCheck("undefined", max) && valueList.length > 0) max = Math.max.apply(Math, valueList as number[]);
 
     const domain: DateBlockDomain = [min, max] as DateBlockDomain;
     const interval = this.grid.interval;
