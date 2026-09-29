@@ -237,6 +237,53 @@ describe("RuleGrid", () => {
       // axis.area('height') = 300 -> half = 150.
       expect(g.axisLine).toHaveBeenCalledWith({ y1: 150, y2: 150, x1: 0, x2: 400 });
     });
+
+    it("FIXED (was a real bug, port-and-original both): top()/bottom() tick labels use gridXFontSize/-Weight/-Color, not the undefined-in-any-theme gridFontColor / no font-size at all", () => {
+      const { g } = makeRuleGrid();
+      g.ticks = [5];
+      g.values = [200];
+      g.bar = 6;
+      g.start = 0;
+      g.end = 400;
+      g.axisLine = vi.fn((attr: Record<string, unknown>) => g.chart.svg.line(attr));
+
+      const topGroup = g.chart.svg.group();
+      g.top(topGroup);
+      const topText = (topGroup.children[1] as TransElement).children[1] as TransElement;
+      expect(topText.attr("font-size")).toBe("theme(gridXFontSize)");
+      expect(topText.attr("font-weight")).toBe("theme(gridXFontWeight)");
+      expect(topText.attr("fill")).toBe("theme(gridXFontColor)");
+
+      const bottomGroup = g.chart.svg.group();
+      g.bottom(bottomGroup);
+      const bottomText = (bottomGroup.children[1] as TransElement).children[1] as TransElement;
+      expect(bottomText.attr("font-size")).toBe("theme(gridXFontSize)");
+      expect(bottomText.attr("font-weight")).toBe("theme(gridXFontWeight)");
+    });
+
+    it("FIXED: left()/right() tick labels use gridYFontSize/-Weight/-Color instead", () => {
+      const { g } = makeRuleGrid();
+      g.ticks = [5];
+      g.values = [200];
+      g.bar = 6;
+      g.start = 0;
+      g.end = 400;
+      g.axisLine = vi.fn((attr: Record<string, unknown>) => g.chart.svg.line(attr));
+
+      const leftGroup = g.chart.svg.group();
+      g.left(leftGroup);
+      const leftText = (leftGroup.children[1] as TransElement).children[1] as TransElement;
+      expect(leftText.attr("font-size")).toBe("theme(gridYFontSize)");
+      expect(leftText.attr("font-weight")).toBe("theme(gridYFontWeight)");
+      expect(leftText.attr("fill")).toBe("theme(gridYFontColor)");
+
+      const rightGroup = g.chart.svg.group();
+      g.right(rightGroup);
+      const rightText = (rightGroup.children[1] as TransElement).children[1] as TransElement;
+      expect(rightText.attr("font-size")).toBe("theme(gridYFontSize)");
+      expect(rightText.attr("font-weight")).toBe("theme(gridYFontWeight)");
+      expect(rightText.attr("fill")).toBe("theme(gridYFontColor)");
+    });
   });
 
   describe("wrapper", () => {

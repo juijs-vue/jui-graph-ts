@@ -87,11 +87,28 @@
 //     testable too - same convention `grid/overlap.ts`'s `custom()`/`grid/table.ts`'s `custom()`
 //     already use). Fixed by implementing `axisLine()` as a genuine new method - see its own doc
 //     comment below for the full reasoning.
-// Net effect: all three Tier A bugs above are now fixed, and a default-configured `RuleGrid` can
-// render through any orient without crashing - each bug's fix covered by its own red→green test in
-// `rule.spec.ts`. The remaining, previously-documented Tier B quirks below (non-decimal-safe domain
-// snapping, the missing `.clamp()` call, and the in-place `this.grid.max`/`.min` mutation) are
-// deliberately left untouched - see each one's own inline comment.
+//  4. **FIXED - every tick label's `fill`/`font-size`/`font-weight` were wrong/missing, in BOTH the
+//     port and the real original.** All four of `top()`/`bottom()`/`left()`/`right()` used to read
+//     `this.chart.theme("gridFontColor")` for `fill` and never set `font-size`/`font-weight` at
+//     all - unlike every OTHER grid's tick labels (`grid/draw2d.ts`'s `drawValueText()`), which use
+//     `gridXFontColor`/`gridYFontColor` (direction-specific) plus explicit `gridXFontSize`/
+//     `gridYFontSize`/`gridXFontWeight`/`gridYFontWeight`. `"gridFontColor"` is not a real theme
+//     key in ANY shipped theme (`classic`/`dark`/`gradient`/`pattern`/`pastel` all only define
+//     `gridXFontColor`/`gridYFontColor`) - Node/hand-verified against the real upstream theme
+//     files too, not just this port's - so `theme("gridFontColor")` always resolved to `undefined`,
+//     silently dropping the `fill` attribute (falling back to the SVG default, opaque black) and
+//     leaving `font-size` at the browser's default too - visibly inconsistent with every sibling
+//     grid's own themed, sized labels on the same chart. Same underlying cause as bugs 1-3 above:
+//     `RuleGrid` never rendered successfully at all in the real engine, so nobody ever saw this
+//     either. Fixed to `gridXFontColor`/`gridXFontSize`/`gridXFontWeight` (`top()`/`bottom()`) or
+//     `gridYFontColor`/`gridYFontSize`/`gridYFontWeight` (`left()`/`right()`), matching
+//     `draw2d.ts`'s own convention exactly.
+// Net effect: all four Tier A bugs above are now fixed, and a default-configured `RuleGrid` can
+// render through any orient, with correctly themed/sized tick labels, without crashing - each
+// bug's fix covered by its own red→green test in `rule.spec.ts`. The remaining, previously-
+// documented Tier B quirks below (non-decimal-safe domain snapping, the missing `.clamp()` call,
+// and the in-place `this.grid.max`/`.min` mutation) are deliberately left untouched - see each
+// one's own inline comment.
 //
 // ============================================================================================
 // `initDomain()` - closely resembles `RangeGrid.initDomain()`, but is NOT a shared/inherited
@@ -321,7 +338,9 @@ export class RuleGrid extends CoreGrid {
                 x: 0,
                 y: bar + bar + 4,
                 "text-anchor": "middle",
-                fill: this.chart.theme("gridFontColor"),
+                fill: this.chart.theme("gridXFontColor"),
+                "font-size": this.chart.theme("gridXFontSize"),
+                "font-weight": this.chart.theme("gridXFontWeight"),
               },
               domain,
             ),
@@ -378,7 +397,9 @@ export class RuleGrid extends CoreGrid {
                 x: 0,
                 y: -bar * 2,
                 "text-anchor": "middle",
-                fill: this.chart.theme(isZero, "gridActiveFontColor", "gridFontColor"),
+                fill: this.chart.theme(isZero, "gridActiveFontColor", "gridXFontColor"),
+                "font-size": this.chart.theme("gridXFontSize"),
+                "font-weight": this.chart.theme("gridXFontWeight"),
               },
               domain,
             ),
@@ -434,7 +455,9 @@ export class RuleGrid extends CoreGrid {
               {
                 x: bar / 2 + 4,
                 y: bar - 2,
-                fill: this.chart.theme("gridFontColor"),
+                fill: this.chart.theme("gridYFontColor"),
+                "font-size": this.chart.theme("gridYFontSize"),
+                "font-weight": this.chart.theme("gridYFontWeight"),
               },
               domain,
             ),
@@ -491,7 +514,9 @@ export class RuleGrid extends CoreGrid {
                 x: -bar - 4,
                 y: bar - 2,
                 "text-anchor": "end",
-                fill: this.chart.theme("gridFontColor"),
+                fill: this.chart.theme("gridYFontColor"),
+                "font-size": this.chart.theme("gridYFontSize"),
+                "font-weight": this.chart.theme("gridYFontWeight"),
               },
               domain,
             ),
