@@ -51,14 +51,17 @@
 //     here were never even valid dead arguments the way every sibling's harmless dead string was;
 //     just an outright typo with no plausible non-crashing original behavior). See `draw()` below
 //     for the full note and `rule.spec.ts` for the red→green test.
-//  2. **`initDomain()`'s "else" (neither string nor function `grid.domain`) branch references a
-//     bare, never-declared `grid` identifier too** (`value_list = grid.domain;` - every OTHER read
-//     in this same method correctly uses `this.grid.*`). Since `RuleGrid.setup()`'s own default is
-//     `domain: null` (neither "string" nor "function"), **this is the branch a default-configured
-//     `RuleGrid` actually takes** - so `initDomain()` itself throws `ReferenceError: grid is not
-//     defined` for the common case, independently of bug 1 above (reached earlier in the render
-//     sequence: `Draw.render()` calls `drawBefore()`, which calls `initDomain()`, before it ever
-//     gets to calling the separately-broken `draw()`).
+//  2. **FIXED - `initDomain()`'s "else" (neither string nor function `grid.domain`) branch used to
+//     reference a bare, never-declared `grid` identifier too** (`value_list = grid.domain;` - every
+//     OTHER read in this same method correctly uses `this.grid.*`). Since `RuleGrid.setup()`'s own
+//     default is `domain: null` (neither "string" nor "function"), **this is the branch a
+//     default-configured `RuleGrid` actually takes** - so `initDomain()` itself used to throw
+//     `ReferenceError: grid is not defined` for the common case, independently of bug 1 above
+//     (reached earlier in the render sequence: `Draw.render()` calls `drawBefore()`, which calls
+//     `initDomain()`, before it ever got to calling the separately-broken `draw()`). Fixed to read
+//     `this.grid.domain` - see `initDomain()`'s own inline comment for the full behavioral
+//     consequence (an array `domain` is used directly as the value list; the `null` default
+//     collapses to a degenerate `[0, 0]` domain rather than crashing).
 //  3. **`top()`/`bottom()`/`left()`/`right()` each call `this.axisLine({...})` as their very first
 //     statement - a method never defined ANYWHERE in the whole engine** (see the extend-chain
 //     section above) - `TypeError: this.axisLine is not a function` on every real invocation. In
@@ -474,8 +477,9 @@ export class RuleGrid extends CoreGrid {
 
   /**
    * @method initDomain
-   * See header comment for the full divergence-from-`RangeGrid.initDomain()` breakdown (bug 2 -
-   * the bare `grid.domain` reference - and every non-crashing design difference).
+   * See header comment for the full divergence-from-`RangeGrid.initDomain()` breakdown (bug 2,
+   * now FIXED - the bare `grid.domain` reference - and every remaining non-crashing design
+   * difference).
    */
   initDomain(): number[] {
     let min = (this.grid.min || undefined) as number | undefined;
@@ -514,11 +518,22 @@ export class RuleGrid extends CoreGrid {
         }
       }
     } else {
-      // PRESERVED BUG 2 (severe - see header comment): bare, never-declared `grid` identifier
-      // (not `this.grid`) - throws `ReferenceError: grid is not defined`. `RuleGrid.setup()`'s
-      // own default `domain: null` takes THIS branch, so this is what a default-configured
-      // `RuleGrid` actually hits.
-      throw new ReferenceError("grid is not defined");
+      // FIXED (was PRESERVED BUG 2, severe - see header comment): originally read a bare,
+      // never-declared `grid` identifier (`value_list = grid.domain;`) instead of
+      // `this.grid.domain` - threw `ReferenceError: grid is not defined` on every
+      // default-configured (`domain: null`) `RuleGrid`, the common case. Fixed to reference
+      // `this.grid.domain`, matching every other read in this method and this branch's clear
+      // intent: when `domain` is configured as a raw array, use it directly as the value list
+      // (same shape as `RangeGrid.initDomain()`'s own array-domain branch); when left at its
+      // `null` default, `valueList` stays empty (`?? []`, behaviorally identical to the
+      // original's own `Math.min/max.apply(Math, null)` - the spec guarantees `apply` with a
+      // `null`/`undefined` argument list is a zero-argument call, same as `apply(Math, [])`) and
+      // `min`/`max` resolve to `Infinity`/`-Infinity` below, which - combined with this class's
+      // default `min: 0, max: 0` config both being treated as "unset" by the `|| undefined` reads
+      // above - collapses to a degenerate `[0, 0]` domain rather than crashing. This mirrors
+      // `RangeGrid.initDomain()`'s own equivalent "no domain source" case, without importing that
+      // file's own separate `hasDomainSource`-guarded fix (out of this defect's scope).
+      valueList = ((this.grid.domain as number[] | null) ?? []) as number[];
     }
 
     const tempMin = Math.min.apply(Math, valueList);

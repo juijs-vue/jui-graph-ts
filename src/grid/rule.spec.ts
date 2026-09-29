@@ -121,16 +121,17 @@ describe("RuleGrid", () => {
     });
   });
 
-  describe("PRESERVED BUG 2 (severe): initDomain()'s default-reached else branch throws ReferenceError - bare `grid` identifier, not `this.grid`", () => {
-    it("default config (domain: null) throws 'grid is not defined' - the common case", () => {
+  describe("FIXED (was PRESERVED BUG 2, severe): initDomain()'s default-reached else branch used to throw ReferenceError - bare `grid` identifier, not `this.grid.domain`", () => {
+    it("default config (domain: null) no longer throws - the common case - and collapses to a degenerate [0,0] domain (no explicit min/max, no domain source)", () => {
       const { g } = makeRuleGrid({ domain: null });
-      expect(() => g.initDomain()).toThrow(ReferenceError);
-      expect(() => g.initDomain()).toThrow(/grid is not defined/);
+      expect(() => g.initDomain()).not.toThrow();
+      expect(g.initDomain()).toEqual([0, 0]);
     });
 
-    it("an array grid.domain ALSO takes the broken else branch (only string/function domains avoid it)", () => {
+    it("an array grid.domain is used directly as the value list (same shape as RangeGrid.initDomain()'s own array-domain branch)", () => {
       const { g } = makeRuleGrid({ domain: [1, 2, 3] as any });
-      expect(() => g.initDomain()).toThrow(/grid is not defined/);
+      expect(() => g.initDomain()).not.toThrow();
+      expect(g.initDomain()).toEqual([1, 3]);
     });
 
     it("string domain avoids the crash entirely (routes through the working branch instead)", () => {
