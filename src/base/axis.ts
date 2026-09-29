@@ -399,7 +399,18 @@ export class Axis {
   private originAxis: AxisOptions;
   private cloneAxis: AxisOptions;
 
-  private map: MapInstance | null = null;
+  // FIXED (Tier A - genuine port regression, confirmed against the real legacy source): the
+  // original's `Axis` constructor keeps the map-instance memoization in a private CLOSURE
+  // variable (`var map = null`), entirely separate from the public `this.map` property that
+  // `reload()`/`drawMapType()` also read/write (the raw map config, then the rendered scale).
+  // This port had collapsed both into a single `private map` class field sharing the SAME
+  // storage as `axis["map"]` (since `drawMapType()` is always called with `axis === this`) - so
+  // `reload()`'s `extend(this, {map: options.map})` overwrote this cache with the raw config
+  // BEFORE `drawMapType()`'s `if (this.map == null)` guard ran, making it permanently see a
+  // non-null (but non-`MapInstance`) value and never call `new MapCtor(...)` - real map charts
+  // crashed on `this.map.render is not a function`. Restored as its own field, decoupled from
+  // the `axis["map"]` config/scale slot.
+  private mapInstance: MapInstance | null = null;
 
   private _area: AreaBox = { x: 0, y: 0, x2: 0, y2: 0, width: 0, height: 0 };
   private _padding: AxisPadding = { top: 0, bottom: 0, left: 0, right: 0 };
@@ -629,16 +640,16 @@ export class Axis {
     mergeSetupChain(MapCtor, mapCfg);
 
     // 맵 객체는 한번만 생성함 (only construct the map object once)
-    if (this.map == null) {
-      this.map = new MapCtor(this.chart, this, mapCfg);
+    if (this.mapInstance == null) {
+      this.mapInstance = new MapCtor(this.chart, this, mapCfg);
     }
 
-    this.map.chart = this.chart;
-    this.map.axis = this;
-    this.map.map = mapCfg;
-    this.map.svg = this.chart.svg;
+    this.mapInstance.chart = this.chart;
+    this.mapInstance.axis = this;
+    this.mapInstance.map = mapCfg;
+    this.mapInstance.svg = this.chart.svg;
 
-    const elem = this.map.render();
+    const elem = this.mapInstance.render();
     elem.root.translate(this.chart.area("x") + this.area("x"), this.chart.area("y") + this.area("y"));
     elem.scale.type = mapCfg.type as string;
     elem.scale.root = elem.root;

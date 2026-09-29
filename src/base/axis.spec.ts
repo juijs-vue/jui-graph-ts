@@ -294,6 +294,50 @@ describe("Axis - drawMapType", () => {
         const axis = new Axis(chart, defaultAxisOptions(), defaultAxisOptions());
         expect((axis as any).map).toBeNull();
     });
+
+    it(
+        "actually constructs the configured MapConstructor and renders it (bug fix - reload()'s " +
+            "extend(this, {map: options.map}) used to overwrite the SAME field drawMapType()'s " +
+            "'construct once' cache check reads, so `new MapCtor(...)` was never called and " +
+            "`this.map.render` crashed with a TypeError on every real map chart)",
+        () => {
+            let constructCalls = 0;
+            let renderCalls = 0;
+            class StubMap {
+                chart: AxisChart;
+                axis: Axis;
+                map: Record<string, unknown>;
+                svg: SVG;
+                constructor(chart: AxisChart, axis: Axis, mapOptions: Record<string, unknown>) {
+                    constructCalls++;
+                    this.chart = chart;
+                    this.axis = axis;
+                    this.map = mapOptions;
+                    this.svg = chart.svg;
+                }
+                render(): { root: TransElement; scale: GridRenderedScale } {
+                    renderCalls++;
+                    const root = this.svg.group();
+                    return { root, scale: { type: "map" } };
+                }
+            }
+
+            const { chart } = makeChart();
+            (chart as unknown as { mapType: unknown }).mapType = StubMap;
+            const mapConfig: Record<string, unknown> = { type: "my-map" };
+            const options = defaultAxisOptions({ map: mapConfig });
+
+            const axis = new Axis(chart, options, options);
+
+            expect(constructCalls).toBe(1);
+            expect(renderCalls).toBe(1);
+            expect((axis.get("map") as Record<string, unknown>)).toBe(mapConfig);
+            // The rendered scale (`this.map`, distinct from `this.get("map")`'s raw config) is
+            // stamped with the config's own `type` - confirming drawMapType() actually reached
+            // render() via the newly-constructed MapInstance, not a crash swallowed somewhere.
+            expect((axis as unknown as { map: GridRenderedScale }).map.type).toBe("my-map");
+        },
+    );
 });
 
 describe("Axis - paging (setScreen/setZoom/screen/next/prev/zoom/update)", () => {
