@@ -254,10 +254,14 @@ describe("DateBlockGrid", () => {
       expect(g.ticks.length).toBeGreaterThan(0);
     });
 
-    it("preserved quirk: axis.data.length === 1 (len=0) makes unit divide-by-zero -> Infinity", () => {
+    it("fixed (Tier A defect 4): axis.data.length === 1 (dataLen=0) no longer divides by zero - falls back to spanning the whole available pixel range", () => {
       const { g } = makeDateBlockGrid({ domain: [0, 1000], interval: 250 }, { data: [{}] });
       g.drawBefore();
-      expect(g.grid.unit).toBe(Infinity);
+      // range is [obj.start, obj.end] = [0, 100] for this test's own axis area (see makeAxisStub's
+      // default area width 100) - Math.abs(0 - 100) = 100, matching a genuine 2+ point chart's own
+      // per-block width in the same minimal case, instead of Infinity.
+      expect(g.grid.unit).toBe(100);
+      expect(Number.isFinite(g.grid.unit as number)).toBe(true);
     });
 
     it("preserved quirk: axis.data.length === 0 (len=-1) silently negates unit", () => {

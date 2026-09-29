@@ -77,11 +77,14 @@
 //     1)` - MUTATING the shared `grid` config object with a fresh, derived `unit` field every
 //     render (same "grid config object mutated in place" category `base/axis.ts`'s two-phase
 //     `axis.x`/`axis.y` finding and this file's own `wrapper()`/`rangeBand()` above already rely
-//     on - `rangeBand()` reads exactly this field back). **Preserved division-by-zero/NaN
-//     quirk, previously undocumented**: `axis.data.length === 1` makes the divisor `0` -
-//     `Math.abs(...)/0` is `Infinity` (or `NaN` if the numerator is also `0`, i.e. a zero-width
-//     grid area); `axis.data.length === 0` makes the divisor `-1`, silently negating `unit`.
-//     Node-verified both cases, tested.
+//     on - `rangeBand()` reads exactly this field back). **FIXED (Tier A defect 4) - was a
+//     preserved division-by-zero/NaN quirk**: `axis.data.length === 1` made the divisor `0` -
+//     `Math.abs(...)/0` was `Infinity` (or `NaN` if the numerator was also `0`, i.e. a zero-width
+//     grid area) - a single-data-point chart is a completely ordinary, common case, not a
+//     contrived edge case. Now: `dataLen === 0` falls back to treating the single point as
+//     spanning the whole available pixel range instead of dividing by zero.
+//     `axis.data.length === 0` (divisor `-1`, silently negating `unit`) is untouched - out of this
+//     defect's scope, not a crash/NaN case. Node-verified both cases, tested.
 //   - finally REPLACES `this.scale` entirely with `Object.assign((i) => this.start + i * unit,
 //     time)` - a pure INDEX-based linear positioner (ignores its argument's actual date/domain
 //     value completely, positions purely by `i * unit` offset from `this.start`), with every one
@@ -271,7 +274,15 @@ export class DateBlockGrid extends DateGrid {
     }
 
     const dataLen = (this.axis.data as unknown[]).length - 1;
-    const unit = Math.abs(range[0] - range[1]) / dataLen;
+    // FIXED (Tier A defect 4 - was a preserved division-by-zero/NaN quirk): a single data point
+    // makes `dataLen` `0`, and the original's unguarded division produced `Infinity` (or `NaN` for
+    // a zero-width grid area) - a single-data-point chart is a completely normal, common case, not
+    // a contrived edge case anyone chose to accept. Now: `dataLen === 0` falls back to treating the
+    // single point as spanning the WHOLE available pixel range (matching the width a genuine
+    // 2+-point chart's own per-block `unit` would resolve to in the same minimal case), instead of
+    // dividing by zero. `dataLen < 0` (an empty `axis.data`) is untouched - out of this defect's
+    // scope, still silently negates `unit` exactly as before.
+    const unit = dataLen !== 0 ? Math.abs(range[0] - range[1]) / dataLen : Math.abs(range[0] - range[1]);
     (this.grid as Record<string, unknown>).unit = unit;
 
     if (typeof this.grid.format === "string") {
