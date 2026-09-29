@@ -257,11 +257,13 @@ describe("RuleGrid", () => {
   });
 
   describe("initDomain - preserved divergences from RangeGrid.initDomain() (no real inheritance relationship - see header comment)", () => {
-    it("string domain: shares RangeGrid's Math.max/min-with-no-.apply bug for array field values", () => {
+    it("FIXED (was PRESERVED BUG, shared with RangeGrid.initDomain()'s own now-fixed finding): string domain with a multi-element array field value no longer produces NaN", () => {
       const { g } = makeRuleGrid({ domain: "f", step: 10 }, { data: [{ f: [1, 2, 3] }] });
-      // Math.max([1,2,3])/Math.min([1,2,3]) both NaN (ToNumber coercion of a multi-element array).
+      // Math.max.apply(Math,[1,2,3])=3 / Math.min.apply(Math,[1,2,3])=1 -> tempMin=1,tempMax=3 ->
+      // unit=ceil(2/10)=1 -> start climbs 0,1,2,3(>=3)=>3; end=3 down to 2,1(<=1 stop)=>1.
       const domain = g.initDomain();
-      expect(domain.every((v) => Number.isNaN(v) || typeof v === "number")).toBe(true);
+      expect(domain.some((v) => Number.isNaN(v))).toBe(false);
+      expect(domain).toEqual([1, 3]);
     });
 
     it("string domain: does NOT push an extra 0 per row (divergence from RangeGrid's own string branch)", () => {

@@ -85,10 +85,13 @@
 // coincidental, not a missed inheritance opportunity, matching the original's own lack of a real
 // `extends RangeGrid` relationship)
 // ============================================================================================
-//  - The string-domain branch shares `RangeGrid.initDomain()`'s own already-documented
-//    `Math.max(value)`/`Math.min(value)`-with-no-`.apply` bug (see `range.ts`'s header comment) -
-//    but does NOT share `RangeGrid`'s own unconditional `value_list.push(0)` for non-array rows;
-//    this file's string branch never pushes an extra `0` at all.
+//  - FIXED: the string-domain branch used to share `RangeGrid.initDomain()`'s own documented
+//    `Math.max(value)`/`Math.min(value)`-with-no-`.apply` bug (see `range.ts`'s header comment -
+//    that file's own equivalent branch is a separate, out-of-scope concern and remains preserved
+//    there as of this writing). Fixed here via `.apply`, matching this file's own sibling
+//    function-domain branch a few lines below (which already used `.apply` correctly). Still does
+//    NOT share `RangeGrid`'s own unconditional `value_list.push(0)` for non-array rows; this file's
+//    string branch never pushes an extra `0` at all.
 //  - After computing `tempMin`/`tempMax`, this file does simple `if (typeof min == 'undefined')
 //    min = tempMin;` (no `range.ts`'s own `|| min > tempMin` re-widening) - an EXPLICITLY
 //    configured `grid.min`/`grid.max` is honored exactly as given here, never widened outward by a
@@ -513,11 +516,13 @@ export class RuleGrid extends CoreGrid {
         const value = data[index][field];
 
         if (Array.isArray(value)) {
-          // PRESERVED BUG (see `range.ts`'s header comment for the same finding): no
-          // `.apply`/spread - coerces the array directly via `ToNumber`, `NaN` for any array
-          // with more than one element.
-          valueList[index] = Math.max(value as unknown as number);
-          valueList.push(Math.min(value as unknown as number));
+          // FIXED (was a PRESERVED BUG shared with `range.ts`'s own now-fixed finding - see that
+          // file's header comment): used to call `Math.max`/`Math.min` directly on the array with
+          // no `.apply`/spread, coercing it via `ToNumber` - `NaN` for any array with more than one
+          // element. Fixed via `.apply`, matching the sibling function-domain branch below (and
+          // `range.ts`'s own corrected pattern).
+          valueList[index] = Math.max.apply(Math, value);
+          valueList.push(Math.min.apply(Math, value));
         } else {
           valueList[index] = value as number;
         }
