@@ -16,12 +16,12 @@ export interface SymbolTemplates {
 
 /**
  * A `PathElement` specialized for drawing small marker symbols (triangle/rect/cross/circle) via
- * its own `add()`/`join()` pair rather than the inherited path-command buffer - see `join()`'s
- * doc comment for a real, preserved bug this split causes.
+ * its own `add()` accumulator as well as the inherited path-command buffer - see `join()`'s doc
+ * comment for the bug this split used to cause (now fixed: `join()` flushes both).
  */
 export class PathSymbolElement extends PathElement {
   // A SEPARATE accumulator from `PathElement`'s own private `orders` array - see the `join()`
-  // override doc comment below for why this matters.
+  // override doc comment below for why this matters (and how `join()` now flushes both).
   private ordersString = "";
 
   /** Returns raw path-command-string templates (not applied to any element) for each symbol. */
@@ -48,25 +48,28 @@ export class PathSymbolElement extends PathElement {
   }
 
   /**
-   * Flushes `ordersString` (built only via `.add()`) into the `d` attribute.
+   * Flushes BOTH the inherited `PathElement` command buffer AND this class's own `ordersString`
+   * (built only via `.add()`) into the `d` attribute.
    *
-   * **Preserved bug, genuine and self-contained** (independent of any module-registry
-   * mechanics - see `element.ts`'s header comment on what IS vs. is NOT carried over from the
-   * original's inheritance quirks): this override completely shadows the inherited
-   * `PathElement.join()`, which is the ONLY method that ever reads/clears `PathElement`'s own
-   * private `orders` array. But `.triangle()`/`.rect()`/`.rectangle()`/`.cross()`/`.circle()`
-   * below all build their path data by calling the INHERITED `MoveTo`/`moveTo`/`lineTo`/`arc`
-   * (i.e. they push onto `PathElement`'s `orders`, not this class's `ordersString`). Net effect:
-   * calling e.g. `.triangle(10, 10, 4, 4)` then `.join()` writes NOTHING to the `d` attribute -
-   * the triangle's commands sit in the parent's `orders` array forever, unreachable, because the
-   * only method that could flush them (`PathElement.join()`) is shadowed here. Only path data
-   * added via this class's own `.add()` method (which appends directly to `ordersString`) ever
-   * actually reaches the `d` attribute through this override. Verified structurally in
-   * `element.path.symbol.spec.ts` (call `.triangle()` then `.join()`, assert `d` stays unset).
+   * **Fixed (Tier A - crash-shaped defect: shapes silently never rendered)**: this override used
+   * to completely shadow the inherited `PathElement.join()`, which is the ONLY method that ever
+   * reads/clears `PathElement`'s own private `orders` array. But `.triangle()`/`.rect()`/
+   * `.rectangle()`/`.cross()`/`.circle()` below all build their path data by calling the
+   * INHERITED `MoveTo`/`moveTo`/`lineTo`/`arc` (i.e. they push onto `PathElement`'s `orders`, not
+   * this class's `ordersString`). Net effect: calling e.g. `.triangle(10, 10, 4, 4)` then
+   * `.join()` wrote NOTHING to the `d` attribute - the shape never rendered at all, for every
+   * caller of any of those five methods. No plausible demo could be relying on those methods
+   * being silent no-ops, so this now calls the inherited `PathElement.join()` (via `super.join()`)
+   * first, to flush whatever `orders`-based path is buffered, then appends any `ordersString`
+   * (from `.add()`) after it - so both accumulators reach the `d` attribute, whether used
+   * separately or together. Verified in `element.path.symbol.spec.ts`.
    */
   join(): void {
+    super.join();
+
     if (this.ordersString.length > 0) {
-      this.attr({ d: this.ordersString });
+      const existing = this.attr("d") as string | undefined;
+      this.attr({ d: existing ? existing + this.ordersString : this.ordersString });
       this.ordersString = "";
     }
   }
@@ -77,15 +80,14 @@ export class PathSymbolElement extends PathElement {
   }
 
   // The four methods below build path commands via the INHERITED PathElement command builder
-  // (see the `join()` doc comment above for why that data is, in practice, never actually
-  // flushed to the `d` attribute by this class's own `join()`).
+  // (see the `join()` doc comment above - `join()` now flushes that inherited buffer too).
 
-  /** Draws a triangle centered at `(cx, cy)`. See the class doc comment: its commands land in the inherited `PathElement` buffer, which this class's `join()` never flushes. */
+  /** Draws a triangle centered at `(cx, cy)`. Its commands land in the inherited `PathElement` buffer, which this class's `join()` now also flushes (see the class doc comment). */
   triangle(cx: number, cy: number, width: number, height: number): this {
     return this.MoveTo(cx, cy).moveTo(0, -height / 2).lineTo(width / 2, height).lineTo(-width, 0).lineTo(width / 2, -height);
   }
 
-  /** Draws a rectangle centered at `(cx, cy)`. See the class doc comment: its commands land in the inherited `PathElement` buffer, which this class's `join()` never flushes. */
+  /** Draws a rectangle centered at `(cx, cy)`. Its commands land in the inherited `PathElement` buffer, which this class's `join()` now also flushes (see the class doc comment). */
   rect(cx: number, cy: number, width: number, height: number): this {
     return this.MoveTo(cx, cy).moveTo(-width / 2, -height / 2).lineTo(width, 0).lineTo(0, height).lineTo(-width, 0).lineTo(0, -height);
   }
@@ -94,12 +96,12 @@ export class PathSymbolElement extends PathElement {
     return this.rect(cx, cy, width, height);
   }
 
-  /** Draws an X/cross centered at `(cx, cy)`. See the class doc comment: its commands land in the inherited `PathElement` buffer, which this class's `join()` never flushes. */
+  /** Draws an X/cross centered at `(cx, cy)`. Its commands land in the inherited `PathElement` buffer, which this class's `join()` now also flushes (see the class doc comment). */
   cross(cx: number, cy: number, width: number, height: number): this {
     return this.MoveTo(cx, cy).moveTo(-width / 2, -height / 2).lineTo(width, height).moveTo(0, -height).lineTo(-width, height);
   }
 
-  /** Draws a circle of radius `r` centered at `(cx, cy)`, as two arcs. See the class doc comment: its commands land in the inherited `PathElement` buffer, which this class's `join()` never flushes. */
+  /** Draws a circle of radius `r` centered at `(cx, cy)`, as two arcs. Its commands land in the inherited `PathElement` buffer, which this class's `join()` now also flushes (see the class doc comment). */
   circle(cx: number, cy: number, r: number): this {
     return this.MoveTo(cx, cy).moveTo(-r, 0).arc(r / 2, r / 2, 0, 1, 1, r, 0).arc(r / 2, r / 2, 0, 1, 1, -r, 0);
   }

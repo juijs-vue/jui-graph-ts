@@ -28,8 +28,8 @@
 // documented here rather than silently deviating, per Phase 0's own instruction.
 //
 // Distinct from the above: `element.path.symbol.ts`'s `join()`-shadowing bug (see that file's
-// header) IS a genuine, self-contained, single-class design bug independent of the registry
-// mechanics, and IS preserved faithfully.
+// header) WAS a genuine, self-contained, single-class design bug independent of the registry
+// mechanics - since fixed there (Tier A: it silently made shapes never render at all).
 
 /** SVG namespace URI, used for every `createElementNS()` call in this builder tree. */
 export const SVG_NS = "http://www.w3.org/2000/svg";

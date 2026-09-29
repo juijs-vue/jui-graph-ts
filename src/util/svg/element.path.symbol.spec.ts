@@ -36,29 +36,42 @@ describe("PathSymbolElement", () => {
         });
     });
 
-    describe("preserved bug: join() shadows PathElement's own accumulator", () => {
-        it("triangle()/rect()/cross()/circle() build path data via the inherited command builder, but join() never flushes it", () => {
+    describe("fixed: join() no longer shadows PathElement's own accumulator", () => {
+        it("triangle()/rect()/cross()/circle() build path data via the inherited command builder, and join() now flushes it", () => {
             const el = makeSymbol();
             el.triangle(5, 5, 4, 4);
 
             el.join();
 
-            // PathSymbolElement's own join() override only ever reads/writes `ordersString`
-            // (populated only by `.add()`) - the inherited MoveTo/moveTo/lineTo calls made by
-            // triangle() went into PathElement's own private `orders` array instead, which this
-            // override never looks at. Net effect: the `d` attribute is never actually set.
-            expect(el.element.getAttribute("d")).toBeNull();
+            // Previously (preserved bug), PathSymbolElement's own join() override only ever read/
+            // wrote `ordersString` (populated only by `.add()`) - the inherited MoveTo/moveTo/
+            // lineTo calls made by triangle() went into PathElement's own private `orders` array
+            // instead, which the override never looked at, so `d` was never actually set. Now
+            // join() also flushes the inherited orders buffer (via `super.join()`), so triangle()
+            // (and rect()/rectangle()/cross()/circle()) actually render.
+            const d = el.element.getAttribute("d");
+            expect(d).not.toBeNull();
+            expect(d).not.toBe("");
+            expect(d).toBe("M5,5 m0,-2 l2,4 l-4,0 l2,-4");
         });
 
-        it("mixing add() and triangle() only ever writes the add()-sourced data", () => {
+        it("rect() also renders now", () => {
+            const el = makeSymbol();
+            el.rect(1, 1, 2, 2);
+            el.join();
+
+            expect(el.element.getAttribute("d")).toBe("M1,1 m-1,-1 l2,0 l0,2 l-2,0 l0,-2");
+        });
+
+        it("mixing add() and rect() flushes BOTH accumulators", () => {
             const el = makeSymbol();
             const tpl = el.template(4, 4);
 
             el.add(1, 1, tpl.rect);
-            el.rect(9, 9, 4, 4); // silently discarded, per the bug above
+            el.rect(9, 9, 4, 4); // previously silently discarded, per the fixed bug above
             el.join();
 
-            expect(el.element.getAttribute("d")).toBe(" M1,1" + tpl.rect);
+            expect(el.element.getAttribute("d")).toBe("M9,9 m-2,-2 l4,0 l0,4 l-4,0 l0,-4" + " M1,1" + tpl.rect);
         });
     });
 });

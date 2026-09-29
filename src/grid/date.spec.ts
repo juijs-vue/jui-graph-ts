@@ -150,9 +150,21 @@ describe("DateGrid", () => {
       expect(g.initDomain()).toEqual([1000, 0]);
     });
 
-    it("preserved bug: fully-default config (domain: null, min: null, max: null) throws TypeError reading value_list.length", () => {
-      const { g } = makeDateGrid({ domain: null, min: null, max: null });
-      expect(() => g.initDomain()).toThrow(TypeError);
+    it("fixed (Tier A defect 1): fully-default config (domain: null, min: null, max: null) no longer throws - auto-computes [min, max] from axis.data's own raw values", () => {
+      const { g } = makeDateGrid({ domain: null, min: null, max: null }, { data: [500, 100, 900] });
+      expect(() => g.initDomain()).not.toThrow();
+      expect(g.initDomain()).toEqual([100, 900]);
+    });
+
+    it("fixed (Tier A defect 1): fully-default config with EMPTY axis.data still doesn't throw (min/max stay undefined, not crash or Infinity)", () => {
+      const { g } = makeDateGrid({ domain: null, min: null, max: null }, { data: [] });
+      expect(() => g.initDomain()).not.toThrow();
+      expect(g.initDomain()).toEqual([undefined, undefined]);
+    });
+
+    it("array domain (explicit) is still used directly (not confused with the null-domain auto-compute path)", () => {
+      const { g } = makeDateGrid({ domain: [3, 7, 9] as any, min: null, max: null }, { data: [500, 100, 900] });
+      expect(g.initDomain()).toEqual([3, 9]);
     });
 
     it("explicit min+max short-circuits past the crash even with domain: null", () => {

@@ -234,17 +234,22 @@ export class DateGrid extends CoreGrid {
    * Resolves the grid's `[min, max]` domain from `grid.domain`/`grid.min`/`grid.max`/
    * `grid.interval`, and sets `this.interval` as a side effect.
    *
-   * **Preserved bug, Node-cross-checked, not obvious from a single read (see `date.spec.ts`)**:
-   * when `grid.domain` is left at its default `null` (the "else" branch below, `valueList =
-   * this.grid.domain`) AND `grid.min`/`grid.max` are ALSO left at their defaults, `valueList` is
-   * `null` at runtime, and the very next line unconditionally reads `valueList.length` inside an
-   * `&&` - `null.length` throws `TypeError: Cannot read properties of null (reading 'length')`.
-   * **A `DateGrid` rendered with zero explicit config - the most minimal, naive usage - crashes
-   * immediately inside `drawBefore()`, in the real upstream library, not a port-introduced
-   * restriction.** Supplying an explicit `domain` (string/function/array) OR explicit `min`+`max`
-   * (short-circuiting past the `.length` read) avoids it. `valueList` is typed loosely enough
-   * below (`unknown[]`, forced via `as`) to let the real runtime `null` value through to that
-   * `.length` read rather than TypeScript statically rejecting the possibility.
+   * **FIXED (Tier A defect 1 - was a preserved crash, Node-cross-checked)**: when `grid.domain`
+   * is left at its default `null` AND `grid.min`/`grid.max` are ALSO left at their defaults, the
+   * old "else" branch set `valueList = this.grid.domain` (i.e. `null`), and the very next line's
+   * unconditional `valueList.length` read (inside an `&&`) threw `TypeError: Cannot read
+   * properties of null (reading 'length')` - **a `DateGrid` rendered with zero explicit config,
+   * the most minimal/naive usage, crashed immediately inside `drawBefore()`.** This was true of
+   * the real upstream library too, not a port-introduced restriction, but is Tier A (an outright
+   * crash on the most minimal usage, not a look anyone could be depending on) - fixed here, unlike
+   * this file's other preserved quirks. Now: a `null`/`undefined` `grid.domain` (kept distinct
+   * from a real array-literal domain, which still passes straight through unchanged) falls back to
+   * auto-computing `valueList` directly from `axis.data`'s own raw values (each row is expected to
+   * be a usable date/timestamp value itself, not a nested object, since no domain field/function
+   * was configured to extract one) - mirroring `range.ts`'s own "use the data directly when no
+   * field/function is configured" default-path handling. An empty `axis.data` still safely
+   * resolves `valueList` to `[]` (guarded by the existing `valueList.length > 0` checks below), so
+   * `min`/`max` simply stay `undefined` in that fully-empty case rather than crashing.
    *
    * **Second preserved quirk (harmless, Node-cross-checked)**: the `typeCheck("function", ...)`
    * branch's countdown loop (`while (index--)`) writes each row's MAX at `valueList[index]`
@@ -288,10 +293,12 @@ export class DateGrid extends CoreGrid {
           valueList[index] = value;
         }
       }
-    } else {
-      // See the preserved-crash note above: `this.grid.domain` is `null` in the fully-default
-      // case, and `valueList.length` below then throws - faithfully, not defensively guarded.
+    } else if (this.grid.domain != null) {
       valueList = this.grid.domain as unknown[];
+    } else {
+      // FIX (Tier A defect 1, see doc comment above): `grid.domain` left at its default `null` -
+      // auto-compute straight from `axis.data`'s own raw values instead of crashing.
+      valueList = data.map((row) => +(row as unknown as number));
     }
 
     if (typeCheck("undefined", min) && valueList.length > 0) min = Math.min.apply(Math, valueList as number[]);
