@@ -489,8 +489,10 @@ describe("loadPath", () => {
     expect(styleTag!.textContent).toBe(".state{fill:red}");
   });
 
-  it("preserved quirk: a malformed response (not exactly one root <svg>) leaves pathData[uri] " +
-    "permanently [] - treated as 'already cached', never retried", () => {
+  it("FIX (Tier A defect C - was: a malformed response left pathData[uri] permanently [], " +
+    "silently treated as 'already cached' forever, never retried): a malformed response (not " +
+    "exactly one root <svg>) does NOT poison the cache - a later call for the same uri retries " +
+    "the fetch instead of silently staying empty forever", () => {
     const { chart } = makeChart();
     const axis = makeAxis(chart);
     const map = makeMap(chart, axis) as any;
@@ -501,11 +503,20 @@ describe("loadPath", () => {
     const first = map.loadPath("bad.svg");
     expect(first).toHaveLength(0);
     expect(FakeXHR.sendCount).toBe(1);
+    // No permanent `[]` written to the cache - `pathData["bad.svg"]` isn't a cached array.
+    expect(Array.isArray(map.pathData["bad.svg"])).toBe(false);
+
+    // Fix the response and retry: a REAL second network request happens (not silently skipped),
+    // and it succeeds.
+    FakeXHR.responses["bad.svg"] = {
+      status: 200,
+      svg: '<svg xmlns="http://www.w3.org/2000/svg"><g id="g1"><path id="p1" d="M0 0"/></g></svg>',
+    };
 
     const second = map.loadPath("bad.svg");
-    expect(second).toHaveLength(0);
-    // no second network request - `[]` reads as "already loaded" via typeCheck("array", ...).
-    expect(FakeXHR.sendCount).toBe(1);
+    expect(FakeXHR.sendCount).toBe(2);
+    expect(second).toHaveLength(1);
+    expect(second[0].path.element.getAttribute("id")).toBe("p1");
   });
 
   it("preserved quirk: a non-200 response triggers the fail callback, which throws", () => {

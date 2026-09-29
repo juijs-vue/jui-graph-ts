@@ -556,24 +556,34 @@ export class Map {
    * reuse `getPathList()`, for 1:1 fidelity), and appends any `<style>` tags straight into the
    * live chart's real root `<svg>` DOM element.
    *
-   * **Preserved quirk**: if the fetched document's root doesn't have EXACTLY one `<svg>` element
-   * (`svg.length != 1` - zero, e.g. a malformed/non-SVG response, or more than one, e.g. multiple
-   * root `<svg>`s), the `success` callback returns immediately, leaving `this.pathData[uri]`
-   * permanently `[]` - and since `[]` IS itself a valid "already cached" array
+   * FIX (Tier A defect C, previously preserved as a quirk - now closed): if the fetched
+   * document's root didn't have EXACTLY one `<svg>` element (`svg.length != 1` - zero, e.g. a
+   * malformed/non-SVG response, or more than one, e.g. multiple root `<svg>`s), the `success`
+   * callback used to return immediately having already written `this.pathData[uri] = []` BEFORE
+   * the fetch even started - and since `[]` IS itself a valid "already cached" array
    * (`_.typeCheck("array", pathData[uri])` is `true` for an empty array too), every SUBSEQUENT
-   * call for the same `uri` treats it as already-successfully-loaded-but-empty and never retries
-   * the fetch. No error is ever surfaced for this case. Tested.
+   * call for the same `uri` silently treated it as already-successfully-loaded-but-empty and
+   * never retried the fetch, with no error ever surfaced. A permanent, silent, unrecoverable
+   * "this map never loads again" state nobody could actually depend on (nothing useful could ever
+   * come from a URI that only ever returns malformed data) - Tier A, fixed here: the collected
+   * path/polygon list is now built into a local variable and only written into `this.pathData[uri]`
+   * (the cache) once a well-formed response was actually parsed. A malformed response leaves the
+   * cache entry unset entirely (not an array), so the very next call for the same `uri` retries
+   * the fetch instead of being treated as cached - see `map.spec.ts`'s dedicated regression test
+   * (fetch malformed once, fix the response, confirm a second real network request happens and
+   * succeeds).
    *
    * **Preserved quirk**: if `xhr.responseXML` is `null` (e.g. the server didn't send a
    * `Content-Type` XHR recognizes as XML), `xml.getElementsByTagName(...)` throws a `TypeError`
-   * uncaught inside the `success` callback - no defensive null-check, matching the original.
+   * uncaught inside the `success` callback - no defensive null-check, matching the original. (See
+   * Tier A defect D, fixed separately.)
    */
   private loadPath(uri: string): { path: SvgElement; data: MapPathDatum }[] {
     if (typeCheck("array", this.pathData[uri])) {
       return this.loadArray(this.pathData[uri]);
     }
 
-    this.pathData[uri] = [];
+    let collected: MapPathDatum[] = [];
 
     ajax({
       url: uri,
@@ -593,7 +603,7 @@ export class Map {
           const name = elem.nodeName.toLowerCase();
 
           if (name === "g") {
-            this.pathData[uri] = this.pathData[uri].concat(this.getPathList(elem) || []);
+            collected = collected.concat(this.getPathList(elem) || []);
           } else if (name === "path" || name === "polygon") {
             const obj: MapPathDatum = {};
 
@@ -610,20 +620,24 @@ export class Map {
               extend(obj, this.getDataById(obj.id as string));
             }
 
-            this.pathData[uri].push(obj);
+            collected.push(obj);
           }
         }
 
         for (let i = 0; i < styleTags.length; i++) {
           this.svg.root.element.appendChild(styleTags[i]);
         }
+
+        // Only cache once a well-formed response was actually parsed - see this method's own doc
+        // comment (Tier A defect C).
+        this.pathData[uri] = collected;
       },
       fail: () => {
         throw new Error("JUI_CRITICAL_ERR: Failed to load resource");
       },
     });
 
-    return this.loadArray(this.pathData[uri]);
+    return this.loadArray(collected);
   }
 
   private isLoadAttribute(name: string): boolean {
