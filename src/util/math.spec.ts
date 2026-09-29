@@ -229,11 +229,10 @@ describe('matrix3d', () => {
 })
 
 describe('inverseMatrix3d', () => {
-  it('PRESERVED BUG: inverting the identity matrix does NOT return the identity matrix - [3][3] is left at 0', () => {
-    // Hand-traced/Node-cross-checked against a literal transcription of the original algorithm
-    // (see this project's PORT_STATUS.md Phase A entry). A correct 4x4 inverse of the identity
-    // matrix is the identity matrix; this always comes out with a 0 in the bottom-right corner
-    // instead, because of the `te[3][4]` (should be `te[3][3]`) typo documented in math.ts.
+  it('FIXED: inverting the identity matrix returns the identity matrix ([3][3] is no longer left at 0)', () => {
+    // Was: `te[3][4]` (out-of-range write, silently dropped) instead of `te[3][3]` - the
+    // bottom-right entry of the result was always left at its default 0. Fixed to write/scale
+    // `te[3][3]`.
     const identity4: number[][] = [
       [1, 0, 0, 0],
       [0, 1, 0, 0],
@@ -247,7 +246,64 @@ describe('inverseMatrix3d', () => {
       [1, 0, 0, 0],
       [0, 1, 0, 0],
       [0, 0, 1, 0],
-      [0, 0, 0, 0], // <- would be 1 in a correct inverse
+      [0, 0, 0, 1],
+    ])
+  })
+
+  it('FIXED: inverting a simple diagonal (scaling) matrix produces a correct [3][3] cofactor and A * inverse(A) ~= identity', () => {
+    // A simple invertible diagonal matrix: scale(2,4,5) with homogeneous w=1.
+    const a: number[][] = [
+      [2, 0, 0, 0],
+      [0, 4, 0, 0],
+      [0, 0, 5, 0],
+      [0, 0, 0, 1],
+    ]
+
+    const result = inverseMatrix3d(a)
+    const rows = result.map((r) => Array.from(r))
+
+    // Mathematically correct inverse of diag(2,4,5,1) is diag(1/2,1/4,1/5,1).
+    expect(rows[0]![0]).toBeCloseTo(0.5)
+    expect(rows[1]![1]).toBeCloseTo(0.25)
+    expect(rows[2]![2]).toBeCloseTo(0.2)
+    expect(rows[3]![3]).toBeCloseTo(1) // <- was always 0 before the fix
+
+    // A * inverse(A) ~= identity (verified via matrix3d, which already ports correctly).
+    const product = matrix3d(a, result as unknown as Float32Array[]) as Float32Array[]
+    const flat = product.map((r) => Array.from(r))
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 4; j++) {
+        expect(flat[i]![j]).toBeCloseTo(i === j ? 1 : 0)
+      }
+    }
+  })
+
+  it('FIXED: a genuinely singular matrix falls back to the identity matrix instead of Infinity/NaN entries', () => {
+    // Two identical rows makes this matrix singular (determinant 0).
+    const singular: number[][] = [
+      [1, 2, 3, 4],
+      [1, 2, 3, 4],
+      [0, 0, 1, 0],
+      [0, 0, 0, 1],
+    ]
+
+    const result = inverseMatrix3d(singular)
+    const rows = result.map((r) => Array.from(r))
+
+    // Previously: `det = 1/sum` where `sum === 0` computed to `Infinity`, never triggering the
+    // `det === 0` fallback check, so every entry ended up `Infinity`/`NaN`. Fixed to check
+    // `sum === 0` before the reciprocal division.
+    for (const row of rows) {
+      for (const value of row) {
+        expect(Number.isFinite(value)).toBe(true)
+      }
+    }
+
+    expect(rows).toEqual([
+      [1, 0, 0, 0],
+      [0, 1, 0, 0],
+      [0, 0, 1, 0],
+      [0, 0, 0, 1],
     ])
   })
 })

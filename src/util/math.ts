@@ -51,21 +51,20 @@
 //     `.multi`/`.remain` on a `fixed()` instance all work fine (none of them reference `this`).
 //     Fixed by calling the module-scope `getFixed` function directly instead of `this.getFixed`,
 //     mirroring jui-core-ts's own already-correct `fixed().div`.
-//  3. `inverseMatrix3d()` has two independent bugs, both preserved:
-//     a. Two of its cofactor assignments target `te[3][4]` instead of `te[3][3]` (a transcription
-//        typo). `te` is a 4-element `Float32Array` per row (valid indices 0-3), so writing index
-//        4 is a silent no-op (typed arrays ignore out-of-range writes) and reading it back is
-//        `undefined`. Net effect: `te[3][3]` (the bottom-right element of the result) is always
-//        left at its default `0`, and the `*= det` pass over `te[3][4]` is also a no-op. The
-//        returned "inverse" matrix's `[3][3]` entry is therefore always `0` instead of the
-//        expected ~`1` for an affine transform - `inverseMatrix3d` is subtly wrong for every
-//        input.
-//     b. The singular-matrix fallback (`if (det === 0) { ...identity... }`) can never trigger for
-//        an actually-singular matrix: `det` is computed as `1 / sum`, so a singular matrix (whose
-//        cofactor-weighted `sum` is `0`) produces `det = Infinity`, not `0`. The check should have
-//        been on `sum === 0` *before* taking the reciprocal. As written, a singular matrix falls
-//        through to the `else` branch and every element gets multiplied by `Infinity`, producing
-//        `Infinity`/`NaN` entries instead of the intended identity-matrix fallback.
+//  3. FIXED (Tier A - data-corrupting defects, no plausible demo could depend on either):
+//     `inverseMatrix3d()` had two independent bugs, both now fixed:
+//     a. Two of its cofactor assignments targeted `te[3][4]` instead of `te[3][3]` (a
+//        transcription typo). `te` is a 4-element `Float32Array` per row (valid indices 0-3), so
+//        writing index 4 was a silent no-op (typed arrays ignore out-of-range writes) and reading
+//        it back was `undefined`. Net effect: `te[3][3]` (the bottom-right element of the result)
+//        was always left at its default `0` instead of the expected ~`1` for an affine transform.
+//        Fixed by changing both assignments to `te[3][3]`.
+//     b. The singular-matrix fallback (`if (det === 0) { ...identity... }`) could never trigger
+//        for an actually-singular matrix: `det` was computed as `1 / sum`, so a singular matrix
+//        (whose cofactor-weighted `sum` is `0`) produced `det = Infinity`, not `0`. Fixed by
+//        checking `sum === 0` *before* taking the reciprocal, and falling back to the identity
+//        matrix in that case (previously a singular matrix fell through to the `else` branch and
+//        every element got multiplied by `Infinity`, producing `Infinity`/`NaN` entries).
 
 // math's functions are only namespace-exported from jui-core-ts (it collides with `resize` in
 // jui-core-ts's own dom.ts), so import the namespace rather than flat names.
@@ -377,9 +376,9 @@ export function matrix3d(a: number[][], b: Vec4 | Vec4[]): Float32Array | Mat4 {
 }
 
 /**
- * Inverts a 4x4 matrix (adjugate/determinant method). See this file's header comment (quirk 3)
- * for two preserved bugs: the `[3][3]` entry is always left at `0`, and the singular-matrix
- * identity fallback can never actually trigger.
+ * Inverts a 4x4 matrix (adjugate/determinant method). See this file's header comment (formerly
+ * quirk 3) for two now-fixed bugs: the `[3][3]` entry used to always be left at `0`, and the
+ * singular-matrix identity fallback used to never actually trigger.
  */
 export function inverseMatrix3d(me: Vec4[]): Mat4 {
   let te: Mat4 = [new Float32Array(4), new Float32Array(4), new Float32Array(4), new Float32Array(4)]
@@ -416,13 +415,15 @@ export function inverseMatrix3d(me: Vec4[]): Mat4 {
   te[3][0] = n23 * n32 * n41 - n22 * n33 * n41 - n23 * n31 * n42 + n21 * n33 * n42 + n22 * n31 * n43 - n21 * n32 * n43
   te[3][1] = n12 * n33 * n41 - n13 * n32 * n41 + n13 * n31 * n42 - n11 * n33 * n42 - n12 * n31 * n43 + n11 * n32 * n43
   te[3][2] = n13 * n22 * n41 - n12 * n23 * n41 - n13 * n21 * n42 + n11 * n23 * n42 + n12 * n21 * n43 - n11 * n22 * n43
-  // Preserved bug (quirk 3a above): should be `te[3][3]` - out-of-range write, silently dropped.
-  te[3][4] = n12 * n23 * n31 - n13 * n22 * n31 + n13 * n21 * n32 - n11 * n23 * n32 - n12 * n21 * n33 + n11 * n22 * n33
+  // Fixed (was quirk 3a above): was `te[3][4]` (out-of-range write, silently dropped).
+  te[3][3] = n12 * n23 * n31 - n13 * n22 * n31 + n13 * n21 * n32 - n11 * n23 * n32 - n12 * n21 * n33 + n11 * n22 * n33
 
-  // Preserved bug (quirk 3b above): should check the pre-reciprocal sum for zero.
-  const det = 1 / (n11 * te[0][0] + n21 * te[0][1] + n31 * te[0][2] + n41 * te[0][3])
+  // Fixed (was quirk 3b above): check the pre-reciprocal sum for zero, instead of checking
+  // `det === 0` after taking the reciprocal (which produces `Infinity`, never exactly `0`, for a
+  // genuinely singular matrix).
+  const sum = n11 * te[0][0] + n21 * te[0][1] + n31 * te[0][2] + n41 * te[0][3]
 
-  if (det === 0) {
+  if (sum === 0) {
     te = [
       new Float32Array([1, 0, 0, 0]),
       new Float32Array([0, 1, 0, 0]),
@@ -430,6 +431,7 @@ export function inverseMatrix3d(me: Vec4[]): Mat4 {
       new Float32Array([0, 0, 0, 1]),
     ]
   } else {
+    const det = 1 / sum
     te[0][0] *= det
     te[0][1] *= det
     te[0][2] *= det
@@ -445,9 +447,9 @@ export function inverseMatrix3d(me: Vec4[]): Mat4 {
     te[3][0] *= det
     te[3][1] *= det
     te[3][2] *= det
-    // Preserved bug (quirk 3a above): should be `te[3][3]` - reads back `undefined` (NaN * det),
-    // then the write to index 4 is silently dropped.
-    te[3][4] *= det
+    // Fixed (was quirk 3a above): was `te[3][4]` - read back `undefined` (NaN * det), then the
+    // write to index 4 was silently dropped.
+    te[3][3] *= det
   }
 
   return te
