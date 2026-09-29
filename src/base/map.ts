@@ -318,9 +318,12 @@ export interface MapScale {
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Port of `chart.map`'s `Map` constructor function as a real ES class (Phase 0 rule 2). See the
- * header comment for the central finding (`render()` is never defined - `axis.js`'s own call site
- * expects one) and the constructor-arity/`MapChart` notes.
+ * Port of `chart.map`'s `Map` constructor function as a real ES class (Phase 0 rule 2). See this
+ * file's own header comment for the full writeup of a real Tier-A defect found and fixed here:
+ * the real upstream `chart.map` never actually defined a `render()` method despite `axis.js`'s own
+ * `drawMapType()` unconditionally calling one, guaranteeing `TypeError: map.render is not a
+ * function` on any chart that configured a `map` axis option. `Map` now defines its own
+ * `render()` (see that method's own doc comment) bridging `draw()`/`drawAfter()`, closing the gap.
  */
 export class Map {
   // Wired externally by whatever assembles the chart (mirrors `axis.js`'s post-`new` assignment -

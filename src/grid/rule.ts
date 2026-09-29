@@ -267,9 +267,9 @@ export class RuleGrid extends CoreGrid {
   /** Draws the top-oriented reference axis line (via `this.axisLine(...)` above) plus one tick
    * mark + optional label per resolved value, entirely via its own `this.chart.svg.group()`/
    * `.translate()`/`.append()` calls - NOT delegating to `CoreGrid.drawTop()` the way every other
-   * concrete grid does (see header comment). Independently callable/testable, but never reached via
-   * a real `render()` pass since `drawBefore()`'s `initDomain()` (bug 2) and `draw()` (bug 1) both
-   * throw first. */
+   * concrete grid does (see header comment). Independently callable/testable; used to never be
+   * reachable via a real `render()` pass at all since `drawBefore()`'s `initDomain()` (bug 2) and
+   * `draw()` (bug 1) both threw first - both are now fixed, see header comment. */
   top(g: TransElement): void {
     const height = this.axis.area("height");
     const halfHeight = height / 2;
@@ -624,8 +624,9 @@ export class RuleGrid extends CoreGrid {
    * `RangeGrid.drawBefore()`), and caches `start`/`size`/`end`/`step`/`nice`/`ticks`/`values`/`bar`/
    * `hideZero`/`center` for `top()`/`bottom()`/`left()`/`right()` to read. See header comment for
    * the real divergences from `RangeGrid.drawBefore()`: no `.clamp()` call at all, and `this.ticks`
-   * is never reversed for left/right orient. In practice this method itself never completes a real
-   * render, since `initDomain()` (bug 2) throws first for the default `domain: null` config. */
+   * is never reversed for left/right orient. Used to never complete a real render at all (bug 2,
+   * `initDomain()` throwing first for the default `domain: null` config) - now completes normally,
+   * see header comment's "now fixed" section. */
   // `drawBefore`/`draw` declared as arrow-function CLASS FIELDS, not method syntax - same
   // TS2425-avoidance convention every other concrete grid subclass in this port already
   // established.
