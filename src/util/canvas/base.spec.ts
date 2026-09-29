@@ -124,29 +124,31 @@ describe("CanvasBase", () => {
     });
 
     describe("drawPage() (fixed)", () => {
-        it("does not throw, and draws a value x value quad via drawFreeRect at (x1,y1)", () => {
+        it("does not throw, and draws the legacy folded-corner page quad via drawFreeRect", () => {
             // Previously (preserved bug), drawPage() unconditionally threw
-            // `ReferenceError: drawFreeRect is not defined` (a literal reproduction of the
-            // original engine reading a bare, never-declared `drawFreeRect` identifier instead of
-            // `this.drawFreeRect`) before drawing anything at all. Now it actually calls
-            // `this.drawFreeRect(...)`, tracing a `value`-sized square quad with its top-left
-            // corner at `(x1, y1)`.
+            // `ReferenceError: drawFreeRect is not defined` - and re-cloning the real legacy
+            // source (juijs/jui-graph's own src/util/canvas/base.js) confirms this is a genuine
+            // bug in the ORIGINAL engine too (it calls a bare `drawFreeRect(context, ...)`,
+            // never declared as a standalone variable there either - only ever assigned as
+            // `this.drawFreeRect`, with no `context` parameter). Now it calls the real
+            // `this.drawFreeRect(...)` with the exact corner offsets the legacy source specifies:
+            // (value+x1,y1), (value+x1-20,y1+14), (value+x1-20,y1+52), (value+x1,y1+38).
             expect(() => canvasBase.drawPage(10, 0, 0, "#fff")).not.toThrow();
 
             const names = ctx.calls.map((c: any) => c.name);
             expect(names).toEqual(["beginPath", "moveTo", "lineTo", "lineTo", "lineTo", "closePath", "fill"]);
-            expect(ctx.calls[1].args).toEqual([0, 0]);
-            expect(ctx.calls[2].args).toEqual([10, 0]);
-            expect(ctx.calls[3].args).toEqual([10, 10]);
-            expect(ctx.calls[4].args).toEqual([0, 10]);
+            expect(ctx.calls[1].args).toEqual([10, 0]);
+            expect(ctx.calls[2].args).toEqual([-10, 14]);
+            expect(ctx.calls[3].args).toEqual([-10, 52]);
+            expect(ctx.calls[4].args).toEqual([10, 38]);
             expect(ctx.fillStyle).toBe("#fff");
         });
 
-        it("strokes a border when border=true", () => {
+        it("strokes a fixed translucent-white border when border=true (legacy hardcodes 'rgba(255,255,255,0.2)', not `color`)", () => {
             canvasBase.drawPage(10, 0, 0, "#fff", true);
             const names = ctx.calls.map((c: any) => c.name);
             expect(names).toContain("stroke");
-            expect(ctx.strokeStyle).toBeTruthy();
+            expect(ctx.strokeStyle).toBe("rgba(255,255,255,0.2)");
         });
 
         it("skips the stroke branch when border=false (default)", () => {

@@ -205,28 +205,34 @@ export class CanvasBase {
   }
 
   /**
-   * Fills (and, when `border` is true, also strokes) a `value`-by-`value` square quad with its
-   * top-left corner at `(x1, y1)`, via `drawFreeRect()`.
+   * Draws a "page" quad (a parallelogram-like shape with a fixed 20/14/52/38px offset silhouette,
+   * matching a folded-corner page/document icon) whose rightmost edge sits at `x1 + value`, via
+   * `drawFreeRect()`. `border` draws a translucent white outline in addition to the fill.
    *
-   * **Fixed (Tier A - crash defect)**: used to call a bare `drawFreeRect(...)` identifier - NOT
-   * `this.drawFreeRect(...)` - which was never declared as a local variable anywhere in the
-   * original file (only ever assigned as `this.drawFreeRect`). Every real invocation of
-   * `drawPage()` therefore threw `ReferenceError: drawFreeRect is not defined` unconditionally,
-   * before drawing anything at all - confirmed by literal transcription, not merely inferred from
-   * reading the code once (even setting that aside, the call also passed an extra leading
-   * `context` argument `drawFreeRect`'s real 10-parameter signature doesn't have, so it would
-   * have been mis-shifted even if the reference did resolve). No plausible demo could be relying
-   * on `drawPage()` always throwing, so this now actually calls `this.drawFreeRect(...)`. Design
-   * decision (the original's exact corner geometry isn't recoverable from this port - no
-   * original source for this exact method was available to cross-check against): treats `value`
-   * as the quad's side length and `(x1, y1)` as its top-left corner, matching the "value + origin
-   * point" shape of `drawPage()`'s own parameter list and `drawSquare()`'s sibling corner-based
-   * convention elsewhere in this class; `border` toggles passing `color` through as
-   * `drawFreeRect()`'s `borderColor` too (stroke + fill in the same color) instead of `null`
-   * (fill only).
+   * **Fixed (Tier A - crash defect)**: the legacy source (`juijs/jui-graph`'s own
+   * `src/util/canvas/base.js`) itself calls a bare `drawFreeRect(context, ...)` - not
+   * `this.drawFreeRect(...)` - which was never declared as a standalone variable anywhere in that
+   * file (only ever assigned as `this.drawFreeRect`, with no `context` parameter). So `drawPage()`
+   * throws `ReferenceError: drawFreeRect is not defined` in the ORIGINAL engine too, on every
+   * real invocation - a genuine legacy bug, not a porting mistake, confirmed by cloning and
+   * reading `juijs/jui-graph` directly. No plausible demo could be relying on `drawPage()` always
+   * throwing, so this calls the real `this.drawFreeRect(...)` (dropping the bogus `context` arg)
+   * with the exact corner offsets and fixed `rgba(255,255,255,0.2)` border color the legacy source
+   * itself specifies.
    */
   drawPage(value: number, x1: number, y1: number, color?: string, border = false): void {
-    this.drawFreeRect(x1, y1, x1 + value, y1, x1 + value, y1 + value, x1, y1 + value, color, border ? color || "#ffffff" : null);
+    this.drawFreeRect(
+      value + x1,
+      y1,
+      value + x1 - 20,
+      y1 + 14,
+      value + x1 - 20,
+      y1 + 52,
+      value + x1,
+      y1 + 38,
+      color,
+      border ? "rgba(255,255,255,0.2)" : null,
+    );
   }
 
   /** Fills a full circle centered on `(x,y)` with radius `d` (default `1`). `color` defaults to `white`. */
