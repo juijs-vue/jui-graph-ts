@@ -124,9 +124,16 @@ describe('fixed()', () => {
     expect(f.remain(5.5, 2)).toBe(1.5)
   })
 
-  it('PRESERVED BUG: .div() throws a TypeError - `this.getFixed` does not exist on the fixed() instance', () => {
-    const f = fixed(0.1)
-    expect(() => f.div(1, 3)).toThrow(TypeError)
+  it('FIXED: .div() returns a correct fixed-precision division instead of throwing', () => {
+    // Previously threw `TypeError: this.getFixed is not a function` - `this` inside `.div` is the
+    // `fixed()` instance itself, which has no `getFixed` method. Fixed to call the module-scope
+    // `getFixed` directly (mirroring jui-core-ts's own already-correct `fixed().div`).
+    const f = fixed(1)
+    expect(() => f.div(10, 4)).not.toThrow()
+    expect(f.div(10, 4)).toBe(2.5)
+
+    const f2 = fixed(0.01)
+    expect(f2.div(1, 4)).toBe(0.25)
   })
 })
 

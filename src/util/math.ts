@@ -43,13 +43,14 @@
 //     - not the real target here. Ported below as the straightforward, non-throwing 1/2/5/10
 //     rounding algorithm (functionally identical to what the implicit-global version actually
 //     computes), not as a literal throw.
-//  2. `fixed(x).div(a, b)` throws a `TypeError` at runtime (`this.getFixed` is not a function).
-//     `.div` was written assuming `this` is the top-level `util.math` namespace object (true for
-//     the standalone `math.div()`, which also calls `this.getFixed`), but `this` is actually the
+//  2. FIXED (Tier A - outright crash, no plausible demo could depend on a throw): `fixed(x).div(a,
+//     b)` used to throw a `TypeError` at runtime (`this.getFixed` is not a function). `.div` was
+//     written assuming `this` is the top-level `util.math` namespace object (true for the
+//     standalone `math.div()`, which also calls `this.getFixed`), but `this` is actually the
 //     `fixed()` instance it's attached to, which has no `getFixed` property. `.plus`/`.minus`/
 //     `.multi`/`.remain` on a `fixed()` instance all work fine (none of them reference `this`).
-//     Dead in practice - grepping the whole engine, only `.plus`/`.minus` are ever called on a
-//     `fixed()` instance (by scale.js/linear.js/grid-range.js's tick-stepping loops).
+//     Fixed by calling the module-scope `getFixed` function directly instead of `this.getFixed`,
+//     mirroring jui-core-ts's own already-correct `fixed().div`.
 //  3. `inverseMatrix3d()` has two independent bugs, both preserved:
 //     a. Two of its cofactor assignments target `te[3][4]` instead of `te[3][3]` (a transcription
 //        typo). `te` is a 4-element `Float32Array` per row (valid indices 0-3), so writing index
@@ -152,8 +153,8 @@ export interface FixedMath {
   minus(a: number, b: number): number
   multi(a: number, b: number): number
   /**
-   * Preserved-broken: throws a `TypeError` at runtime. See this file's header comment (quirk 2).
-   * Never called anywhere in the original engine.
+   * Decimal-precision-safe division. Fixed (see this file's header comment, formerly quirk 2) -
+   * used to throw a `TypeError` at runtime (`this.getFixed` is not a function).
    */
   div(a: number, b: number): number
   remain(a: number, b: number): number
@@ -170,11 +171,11 @@ export function fixed(fixedValue: number): FixedMath {
   func.minus = (a, b) => Math.round(a * pow - b * pow) / pow
   func.multi = (a, b) => Math.round(a * pow * (b * pow)) / (pow * pow)
 
-  func.div = function (this: FixedMath, a: number, b: number): number {
+  func.div = (a, b) => {
     const result = (a * pow) / (b * pow)
-    // Preserved bug (quirk 2 above): `this` is `func` here, which has no `getFixed` - throws.
-    const thisAsNamespace = this as unknown as { getFixed(a: number, b: number): number }
-    const pow2 = Math.pow(10, thisAsNamespace.getFixed(result, 0))
+    // Fixed (was quirk 2 above): call the module-scope `getFixed` directly instead of the
+    // nonexistent `this.getFixed` - mirrors jui-core-ts's own already-correct `fixed().div`.
+    const pow2 = Math.pow(10, getFixed(result, 0))
     return Math.round(result * pow2) / pow2
   }
 
