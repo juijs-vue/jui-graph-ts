@@ -157,13 +157,15 @@ export { TableGrid } from './grid/table'
 // Investigated precisely for a possible Phase D (`polygon/`) dependency (a concurrent agent's
 // report had flagged this as a maybe) and confirmed to have NONE - `rule.js` never references
 // `polygon/*.js` anywhere; the false trail was `this.axisLine(...)`, which merely resembles
-// `grid/draw3d.js`'s own differently-named/differently-shaped `drawAxisLine` mixin method. What IS
-// real: `axisLine` is never defined ANYWHERE in the whole engine (confirmed via an exhaustive
-// grep), and two further independent bugs (a bare, never-declared `grid` identifier reference in
-// `initDomain()`'s default-reached branch, and three bare, never-declared `chart`/`orient`/`grid`
-// identifiers in `draw()`) mean a real `RuleGrid` can never successfully render through any orient
-// in the original engine - see `rule.ts`'s header comment for the full, Node-verified bug trail,
-// each preserved faithfully and independently unit-tested.
+// `grid/draw3d.js`'s own differently-named/differently-shaped `drawAxisLine` mixin method. The
+// original engine had THREE independent Tier A crashes here (`axisLine` never defined anywhere; a
+// bare, never-declared `grid` identifier reference in `initDomain()`'s default-reached branch;
+// three bare, never-declared `chart`/`orient`/`grid` identifiers in `draw()`) plus a Tier A `NaN`
+// bug (a multi-element array domain value coerced via `Math.max`/`Math.min` with no `.apply`) that
+// together meant a real `RuleGrid` could never successfully render through any orient - all four
+// have since been FIXED (a real, previously unreachable-by-crash grid type, now also registered in
+// `jui-chart-vue`'s `GRID_TYPES` under `"rule"`) - see `rule.ts`'s header comment for the full,
+// Node-verified bug trail and each fix's own red→green test.
 export { RuleGrid } from './grid/rule'
 export type { RuleGridOptions } from './grid/rule'
 
