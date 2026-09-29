@@ -139,30 +139,22 @@ export class Element {
   /**
    * Detaches this element from its parent's `children` array.
    *
-   * **Preserved bug**: the original computes `index` (the position of `this` within the
-   * parent's `children`) but never actually uses it to splice just that one entry out. Instead
-   * it rebuilds the parent's `children` from only the entries strictly BEFORE the match (the
-   * loop `break`s as soon as it finds `this`, having pushed only prior siblings into `nChild`),
-   * then assigns that truncated array back - silently dropping every sibling that came AFTER
-   * `this` too, not just `this` itself. Node-cross-checked: `parent.children = [A, B, C]`,
-   * `B.remove()` leaves `parent.children = [A]`, not `[A, C]`. Not fixed here.
+   * **Fixed (Tier A - data-corrupting defect)**: the original computed `index` (the position of
+   * `this` within the parent's `children`) but never actually used it to splice just that one
+   * entry out. Instead it rebuilt the parent's `children` from only the entries strictly BEFORE
+   * the match (the loop `break`d as soon as it found `this`, having pushed only prior siblings
+   * into `nChild`), then assigned that truncated array back - silently dropping every sibling
+   * that came AFTER `this` too, not just `this` itself (`parent.children = [A, B, C]`,
+   * `B.remove()` used to leave `parent.children = [A]`, not `[A, C]`). No plausible demo could be
+   * relying on later siblings vanishing on removal (and `append()`/`insert()` above call this
+   * internally when reparenting an already-attached element, so the corruption wasn't even
+   * confined to explicit `.remove()` calls) - now the parent's `children` is rebuilt by filtering
+   * out `this` specifically, regardless of position, so both earlier and later siblings survive.
    */
   remove(): this {
-    let index = 0;
-    const nChild: Element[] = [];
     const pChild = this.parent!.children;
 
-    for (let i = 0; i < pChild.length; i++) {
-      if (pChild[i] === this) {
-        index = i;
-        break;
-      }
-
-      nChild.push(pChild[i]);
-    }
-    void index; // computed but unused in the original too - see doc comment above
-
-    this.parent!.children = nChild;
+    this.parent!.children = pChild.filter((child) => child !== this);
 
     return this;
   }

@@ -196,7 +196,7 @@ describe("Element", () => {
             ]);
         });
 
-        it("preserved bug: remove() drops every sibling after the removed element, not just itself", () => {
+        it("fixed: remove() drops only the removed element, keeping siblings on both sides", () => {
             const parent = makeElement("g");
             const a = makeElement("rect");
             const b = makeElement("circle");
@@ -205,9 +205,10 @@ describe("Element", () => {
 
             b.remove();
 
-            // A correct implementation would leave [a, c]; the original's `remove()` only keeps
-            // elements strictly BEFORE the removed one, silently dropping `c` too.
-            expect(parent.children).toEqual([a]);
+            // Previously (preserved bug), `remove()` only kept elements strictly BEFORE the
+            // removed one, silently dropping every later sibling (`c`) too - leaving `[a]`. Now
+            // fixed: only `b` itself is dropped, `[a, c]` remains.
+            expect(parent.children).toEqual([a, c]);
         });
     });
 
