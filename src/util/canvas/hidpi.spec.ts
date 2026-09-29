@@ -1,23 +1,44 @@
-import { describe, it, expect } from "vitest";
-import { pixelRatio, apply, polyfills } from "./hidpi";
+import { describe, it, expect, afterEach } from "vitest";
+import { pixelRatio, computePixelRatio, apply, polyfills } from "./hidpi";
 
 // Under jsdom (no real `canvas` npm package installed, matching this project's dependencies),
 // `HTMLCanvasElement.getContext('2d')` returns `null` and `window.devicePixelRatio` is `1` - so
 // `pixelRatio` always computes to exactly 1 in this test environment, which means
-// `polyfillForCanvasRenderingContext2D()`'s own `if (pixelRatio === 1) return;` guard (see
-// hidpi.ts) fires on every call here, and the actual coordinate-scaling logic below it never
-// runs. That logic (and the `isPointinPath`/`isPointinStroke` typo bug documented in hidpi.ts)
-// is verified by hand-trace/Node-cross-check in the comments below instead, the same treatment
-// `element.path.ts`'s jsdom-unimplemented `length()` got.
+// `polyfillForCanvasRenderingContext2D()`'s own `if (ratio === 1) return;` guard (see hidpi.ts)
+// fires on every call that doesn't pass an explicit ratio override. `apply()`'s optional second
+// `ratio` argument (default: the module's own `pixelRatio`) exists so this file can force a
+// non-1 ratio and actually exercise the patch loop under jsdom.
 describe("canvas/hidpi", () => {
-    it("pixelRatio is a positive finite number, computed once at module load", () => {
-        expect(typeof pixelRatio).toBe("number");
-        expect(pixelRatio).toBeGreaterThan(0);
-        expect(Number.isFinite(pixelRatio)).toBe(true);
-    });
+    describe("pixelRatio / computePixelRatio", () => {
+        it("pixelRatio is a positive finite number, computed once at module load", () => {
+            expect(typeof pixelRatio).toBe("number");
+            expect(pixelRatio).toBeGreaterThan(0);
+            expect(Number.isFinite(pixelRatio)).toBe(true);
+        });
 
-    it("under jsdom, pixelRatio is exactly 1 (devicePixelRatio=1, backingStorePixelRatio falls back to 1 since getContext('2d') is null)", () => {
-        expect(pixelRatio).toBe(1);
+        it("under jsdom, pixelRatio is exactly 1 (devicePixelRatio=1, backingStorePixelRatio falls back to 1 since getContext('2d') is null)", () => {
+            expect(pixelRatio).toBe(1);
+        });
+
+        describe("FIXED: no longer crashes when `document` is unavailable (e.g. SSR)", () => {
+            const originalDocument = globalThis.document;
+
+            afterEach(() => {
+                (globalThis as any).document = originalDocument;
+            });
+
+            it("computePixelRatio() returns 1 and does not throw when `document` is undefined", () => {
+                // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+                delete (globalThis as any).document;
+                expect(typeof globalThis.document).toBe("undefined");
+
+                let result: number | undefined;
+                expect(() => {
+                    result = computePixelRatio();
+                }).not.toThrow();
+                expect(result).toBe(1);
+            });
+        });
     });
 
     it("apply() does not throw against a context-shaped stub, and leaves methods unpatched when pixelRatio===1", () => {
@@ -40,28 +61,44 @@ describe("canvas/hidpi", () => {
         expect(() => polyfills()).toThrow(ReferenceError);
     });
 
-    // Hand-trace (not runtime-verifiable under jsdom's pixelRatio===1 environment): with e.g.
-    // pixelRatio=2, `ratioArgs.arc = [0,1,2]` means `context.arc(x,y,r,start,end)` gets patched
-    // so only ARGUMENT INDICES 0/1/2 (x, y, r) are multiplied by 2 - start/end angles (indices
-    // 3/4) are deliberately left unscaled, which is correct (angles aren't pixel coordinates).
-    // `ratioArgs.fillRect = 'all'` instead multiplies EVERY argument - correct there too, since
-    // all 4 of fillRect(x,y,w,h) are pixel-space.
-    //
-    // Preserved bug (see hidpi.ts's `ratioArgs` doc comment, verified by direct inspection of the
-    // object literal rather than a runtime assertion, since jsdom can't construct a real
-    // CanvasRenderingContext2D to patch - see the test above): `isPointinPath`/`isPointinStroke`
-    // are typo'd (should be `isPointInPath`/`isPointInStroke`), so the patch loop patches two
-    // dead, never-callable property names instead of the real methods - `isPointInPath`/
-    // `isPointInStroke` remain completely unscaled by this polyfill, a genuine coverage gap.
-    it("documents the isPointinPath/isPointinStroke typo via apply() against a stub context", () => {
-        const ctx: any = { isPointInPath: () => true, isPointInStroke: () => true };
-        // pixelRatio===1 under jsdom prevents actually observing the patch loop run at all (see
-        // the guard-behavior test above) - this at least confirms apply() doesn't accidentally
-        // touch the correctly-spelled methods regardless.
-        apply(ctx);
-        expect(typeof ctx.isPointInPath).toBe("function");
-        expect(typeof ctx.isPointInStroke).toBe("function");
+    // With a real pixel ratio (forced via `apply()`'s optional second argument, since jsdom's own
+    // `pixelRatio` always computes to 1 - see the top-of-file comment): `ratioArgs.arc = [0,1,2]`
+    // means `context.arc(x,y,r,start,end)` gets patched so only ARGUMENT INDICES 0/1/2 (x, y, r)
+    // are multiplied by the ratio - start/end angles (indices 3/4) are deliberately left
+    // unscaled, which is correct (angles aren't pixel coordinates). `ratioArgs.fillRect = 'all'`
+    // instead multiplies EVERY argument - correct there too, since all 4 of fillRect(x,y,w,h) are
+    // pixel-space.
+    it("FIXED: isPointInPath/isPointInStroke (correctly spelled) get patched and scale their coordinate args by the pixel ratio", () => {
+        const calls: { name: string; args: any[] }[] = [];
+        const ctx: any = {
+            isPointInPath: (...args: any[]) => {
+                calls.push({ name: "isPointInPath", args });
+                return true;
+            },
+            isPointInStroke: (...args: any[]) => {
+                calls.push({ name: "isPointInStroke", args });
+                return false;
+            },
+        };
+
+        const originalIsPointInPath = ctx.isPointInPath;
+        const originalIsPointInStroke = ctx.isPointInStroke;
+
+        apply(ctx, 2);
+
+        // The real, correctly-spelled methods got replaced with wrapped versions...
+        expect(ctx.isPointInPath).not.toBe(originalIsPointInPath);
+        expect(ctx.isPointInStroke).not.toBe(originalIsPointInStroke);
+        // ...and the typo'd keys are never created.
         expect(ctx.isPointinPath).toBeUndefined();
         expect(ctx.isPointinStroke).toBeUndefined();
+
+        // Calling the patched method scales its coordinate args by the pixel ratio (2) before
+        // delegating to the original.
+        expect(ctx.isPointInPath(10, 20)).toBe(true);
+        expect(calls[0]).toEqual({ name: "isPointInPath", args: [20, 40] });
+
+        expect(ctx.isPointInStroke(5, 6)).toBe(false);
+        expect(calls[1]).toEqual({ name: "isPointInStroke", args: [10, 12] });
     });
 });

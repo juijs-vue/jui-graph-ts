@@ -17,39 +17,51 @@
 // Phase 0 rule 8) - jui-chart-vue's own DPR handling should NOT be migrated to depend on this
 // file; that non-migration decision stands, this port doesn't reopen it.
 //
-// **Preserved SSR/non-browser hazard**: `pixelRatio` below is computed once, at module
+// **FIXED SSR/non-browser hazard**: `pixelRatio` below used to be computed once, at module
 // evaluation, via `document.createElement('canvas')` - importing this module without a real
-// `document` throws immediately, exactly like the original (not guarded/deferred here).
+// `document` threw immediately, exactly like the original. The computation is now factored into
+// `computePixelRatio()`, guarded with a `typeof document !== 'undefined'` check that falls back
+// to `1` otherwise, so importing this module (or calling `computePixelRatio()` directly) in a
+// non-browser environment no longer crashes.
 
-const pixelRatioCanvas: HTMLCanvasElement = document.createElement("canvas");
-const pixelRatioContext = pixelRatioCanvas.getContext("2d") as (CanvasRenderingContext2D & Record<string, any>) | null;
+/**
+ * Computes the detected device/backing-store pixel ratio. Returns `1` when `document` isn't
+ * available (SSR, or a non-browser test environment) instead of throwing.
+ */
+export function computePixelRatio(): number {
+  if (typeof document === "undefined") return 1;
 
-const backingStorePixelRatio: number =
-  (pixelRatioContext &&
-    (pixelRatioContext.backingStorePixelRatio ||
-      pixelRatioContext.webkitBackingStorePixelRatio ||
-      pixelRatioContext.mozBackingStorePixelRatio ||
-      pixelRatioContext.msBackingStorePixelRatio ||
-      pixelRatioContext.oBackingStorePixelRatio ||
-      pixelRatioContext.backingStorePixelRatio)) ||
-  1;
+  const pixelRatioCanvas: HTMLCanvasElement = document.createElement("canvas");
+  const pixelRatioContext = pixelRatioCanvas.getContext("2d") as (CanvasRenderingContext2D & Record<string, any>) | null;
+
+  const backingStorePixelRatio: number =
+    (pixelRatioContext &&
+      (pixelRatioContext.backingStorePixelRatio ||
+        pixelRatioContext.webkitBackingStorePixelRatio ||
+        pixelRatioContext.mozBackingStorePixelRatio ||
+        pixelRatioContext.msBackingStorePixelRatio ||
+        pixelRatioContext.oBackingStorePixelRatio ||
+        pixelRatioContext.backingStorePixelRatio)) ||
+    1;
+
+  return (window.devicePixelRatio || 1) / backingStorePixelRatio;
+}
 
 /** The detected device/backing-store pixel ratio - computed once, at module load (see header). */
-export const pixelRatio: number = (window.devicePixelRatio || 1) / backingStorePixelRatio;
+export const pixelRatio: number = computePixelRatio();
 
 type RatioArgSpec = "all" | number[];
 
 /**
  * The list of `CanvasRenderingContext2D` methods to scale coordinate arguments for.
  *
- * **Preserved bug**: `isPointinPath`/`isPointinStroke` are typo'd (lowercase `in`) - the real
- * methods are `isPointInPath`/`isPointInStroke`. Since `prototype[key]` for a typo'd key is
- * `undefined`, the patch loop below silently creates two new, never-called, broken own-
- * properties (`prototype.isPointinPath = function(){ ...; return undefined.apply(...) }`, which
- * would itself throw if ever invoked) while leaving the REAL `isPointInPath`/`isPointInStroke`
- * methods completely unpatched - a genuine functional gap (hit-testing coordinates never get
- * DPR-scaled), not just dead code. Reproduced with the original's exact typo'd key spelling
- * rather than "fixed" to the correct capitalization.
+ * **FIXED**: `isPointInPath`/`isPointInStroke` used to be typo'd as `isPointinPath`/
+ * `isPointinStroke` (lowercase `in`). Since `prototype[key]` for a typo'd key was `undefined`,
+ * the patch loop used to silently create two new, never-called, broken own-properties
+ * (`prototype.isPointinPath = function(){ ...; return undefined.apply(...) }`, which would
+ * itself throw if ever invoked) while leaving the REAL `isPointInPath`/`isPointInStroke` methods
+ * completely unpatched - a genuine functional gap (hit-testing coordinates never got
+ * DPR-scaled), not just dead code. Fixed to the correct capitalization.
  */
 const ratioArgs: Record<string, RatioArgSpec> = {
   fillRect: "all",
@@ -60,8 +72,8 @@ const ratioArgs: Record<string, RatioArgSpec> = {
   arc: [0, 1, 2],
   arcTo: "all",
   bezierCurveTo: "all",
-  isPointinPath: "all",
-  isPointinStroke: "all",
+  isPointInPath: "all",
+  isPointInStroke: "all",
   quadraticCurveTo: "all",
   rect: "all",
   translate: "all",
@@ -69,8 +81,13 @@ const ratioArgs: Record<string, RatioArgSpec> = {
   createLinearGradient: "all",
 };
 
-function polyfillForCanvasRenderingContext2D(prototype: any): void {
-  if (pixelRatio === 1) return;
+/**
+ * Patches `prototype` (a `CanvasRenderingContext2D` instance or its shared prototype) in place.
+ * `ratio` defaults to the module's own `pixelRatio` - the optional override exists so callers
+ * (and tests, since jsdom's own `pixelRatio` always computes to `1`) can force a specific ratio.
+ */
+function polyfillForCanvasRenderingContext2D(prototype: any, ratio: number = pixelRatio): void {
+  if (ratio === 1) return;
 
   Object.keys(ratioArgs).forEach((key) => {
     const value = ratioArgs[key];
@@ -80,10 +97,10 @@ function polyfillForCanvasRenderingContext2D(prototype: any): void {
       let scaledArgs = args;
 
       if (value === "all") {
-        scaledArgs = args.map((a) => a * pixelRatio);
+        scaledArgs = args.map((a) => a * ratio);
       } else if (Array.isArray(value)) {
         for (let i = 0, len = value.length; i < len; i++) {
-          scaledArgs[value[i]] *= pixelRatio;
+          scaledArgs[value[i]] *= ratio;
         }
       }
 
@@ -94,34 +111,34 @@ function polyfillForCanvasRenderingContext2D(prototype: any): void {
   // Stroke lineWidth adjustment
   const _superStroke = prototype.stroke;
   prototype.stroke = function (this: any, ...args: any[]) {
-    this.lineWidth *= pixelRatio;
+    this.lineWidth *= ratio;
     _superStroke.apply(this, args);
-    this.lineWidth /= pixelRatio;
+    this.lineWidth /= ratio;
   };
 
   // Text
   const _superFillText = prototype.fillText;
   prototype.fillText = function (this: any, ...args: any[]) {
-    args[1] *= pixelRatio; // x
-    args[2] *= pixelRatio; // y
+    args[1] *= ratio; // x
+    args[2] *= ratio; // y
 
-    this.font = this.font.replace(/(\d+)(px|em|rem|pt)/g, (_w: string, m: any, u: string) => m * pixelRatio + u);
+    this.font = this.font.replace(/(\d+)(px|em|rem|pt)/g, (_w: string, m: any, u: string) => m * ratio + u);
 
     _superFillText.apply(this, args);
 
-    this.font = this.font.replace(/(\d+)(px|em|rem|pt)/g, (_w: string, m: any, u: string) => m / pixelRatio + u);
+    this.font = this.font.replace(/(\d+)(px|em|rem|pt)/g, (_w: string, m: any, u: string) => m / ratio + u);
   };
 
   const _superStrokeText = prototype.strokeText;
   prototype.strokeText = function (this: any, ...args: any[]) {
-    args[1] *= pixelRatio; // x
-    args[2] *= pixelRatio; // y
+    args[1] *= ratio; // x
+    args[2] *= ratio; // y
 
-    this.font = this.font.replace(/(\d+)(px|em|rem|pt)/g, (_w: string, m: any, u: string) => m * pixelRatio + u);
+    this.font = this.font.replace(/(\d+)(px|em|rem|pt)/g, (_w: string, m: any, u: string) => m * ratio + u);
 
     _superStrokeText.apply(this, args);
 
-    this.font = this.font.replace(/(\d+)(px|em|rem|pt)/g, (_w: string, m: any, u: string) => m / pixelRatio + u);
+    this.font = this.font.replace(/(\d+)(px|em|rem|pt)/g, (_w: string, m: any, u: string) => m / ratio + u);
   };
 }
 
@@ -150,7 +167,11 @@ export function polyfills(): void {
   polyfillForHTMLCanvasElement(HTMLCanvasElement.prototype);
 }
 
-/** Applies just the 2D-context patch set to a single context instance (not the shared prototype). */
-export function apply(context: CanvasRenderingContext2D): void {
-  polyfillForCanvasRenderingContext2D(context);
+/**
+ * Applies just the 2D-context patch set to a single context instance (not the shared prototype).
+ * `ratio` defaults to the module's own `pixelRatio` - pass it explicitly to force a specific
+ * ratio (e.g. in tests, since jsdom's own `pixelRatio` always computes to `1`).
+ */
+export function apply(context: CanvasRenderingContext2D, ratio: number = pixelRatio): void {
+  polyfillForCanvasRenderingContext2D(context, ratio);
 }

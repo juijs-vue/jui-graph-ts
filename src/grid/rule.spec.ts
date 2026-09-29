@@ -109,14 +109,15 @@ describe("RuleGrid", () => {
     });
   });
 
-  describe("PRESERVED BUG 1 (severe): draw() always throws ReferenceError, unconditionally - bare, never-declared chart/orient/grid identifiers", () => {
-    it("draw() throws 'chart is not defined' immediately, never calling drawGrid()", () => {
+  describe("FIXED (was PRESERVED BUG 1, severe): draw() used to always throw ReferenceError, unconditionally - bare, never-declared chart/orient/grid identifiers", () => {
+    it("draw() delegates to drawGrid(), matching every other concrete grid's draw()", () => {
       const { g } = makeRuleGrid();
-      const spy = vi.spyOn(g, "drawGrid");
+      const sentinel = { root: g.chart.svg.group(), scale: g.scale };
+      const spy = vi.spyOn(g, "drawGrid").mockReturnValue(sentinel);
 
-      expect(() => g.draw()).toThrow(ReferenceError);
-      expect(() => g.draw()).toThrow(/chart is not defined/);
-      expect(spy).not.toHaveBeenCalled();
+      expect(() => g.draw()).not.toThrow();
+      expect(g.draw()).toBe(sentinel);
+      expect(spy).toHaveBeenCalled();
     });
   });
 

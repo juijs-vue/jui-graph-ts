@@ -28,29 +28,29 @@
 // engine, always - see the field declaration and `top()`/`bottom()`/`left()`/`right()` below.
 //
 // ============================================================================================
-// `RuleGrid` is a genuinely, severely, MULTIPLY broken class in the real original engine - three
-// independent, previously-undocumented bugs "layer" on top of each other (same "onion" category
+// `RuleGrid` WAS a genuinely, severely, MULTIPLY broken class in the real original engine - three
+// independent, previously-undocumented bugs "layered" on top of each other (same "onion" category
 // `grid/table.ts`'s doubly/triply-dead `custom()` loop already documents), Node/hand-verified
-// against literal transcriptions, not merely inferred from a single read
+// against literal transcriptions, not merely inferred from a single read. All three are Tier A
+// (outright crashes nobody could depend on, since the class could never render at all) and have
+// since been FIXED - see each item below for what changed.
 // ============================================================================================
-//  1. **`draw()` ALWAYS throws, unconditionally, before `drawGrid()`/`top`/`bottom`/`left`/`right`
-//     are ever reached via a real render.** The original: `this.draw = function() { return
-//     this.drawGrid(chart, orient, "rule", grid); }` - `chart`/`orient`/`grid` are BARE, NEVER-
-//     DECLARED identifiers (not `this.chart`/`this.grid`, and `orient` isn't declared ANYWHERE in
-//     this file at all - every other `grid/*.js` file that drops a dead string argument like
-//     `"rule"` at least reads real, declared values for its other dead arguments; this file reads
-//     three genuinely-undefined ones). JS evaluates call arguments strictly left-to-right BEFORE
-//     the call itself - reading the FIRST argument (`chart`) throws `ReferenceError: chart is not
-//     defined` immediately (Node-verified), so `this.drawGrid(...)` is never even invoked. Every
-//     real `RuleGrid.draw()` call crashes, unconditionally, in the real upstream engine - not a
-//     port-introduced restriction. Reproduced literally (same "preserve a genuinely-reachable
-//     upstream crash rather than silently drop it" discipline `util/canvas/base.ts`'s
-//     `drawFreeRect` bug still follows - NOT the same category as `math.ts`'s `niceNum()`/
-//     `util/svg/element.ts`'s `is()`, which were both previously MIS-diagnosed as this kind of
-//     always-throwing bug and have since been corrected - see each file's own header comment),
-//     not "fixed" by silently dropping the dead identifiers the way every other concrete grid's
-//     harmless dead-STRING-argument case (`this.drawGrid("block")` etc, which `drawGrid()` itself
-//     was ALREADY discarding) was adapted.
+//  1. **FIXED - `draw()` used to ALWAYS throw, unconditionally, before `drawGrid()`/`top`/`bottom`/
+//     `left`/`right` were ever reached via a real render.** The original: `this.draw = function() {
+//     return this.drawGrid(chart, orient, "rule", grid); }` - `chart`/`orient`/`grid` were BARE,
+//     NEVER-DECLARED identifiers (not `this.chart`/`this.grid`, and `orient` isn't declared
+//     ANYWHERE in this file at all - every other `grid/*.js` file that drops a dead string argument
+//     like `"rule"` at least reads real, declared values for its other dead arguments; this file
+//     read three genuinely-undefined ones). JS evaluates call arguments strictly left-to-right
+//     BEFORE the call itself - reading the FIRST argument (`chart`) threw `ReferenceError: chart is
+//     not defined` immediately (Node-verified), so `this.drawGrid(...)` was never even invoked.
+//     Every real `RuleGrid.draw()` call crashed, unconditionally, in the real upstream engine - not
+//     a port-introduced restriction. Fixed by matching every other concrete grid's own `draw()`
+//     shape exactly (see `range.ts`/`log.ts`/`date.ts`/`block.ts` etc.): `return this.drawGrid();`,
+//     zero arguments (`drawGrid()` never reads any argument at all - the three bare identifiers
+//     here were never even valid dead arguments the way every sibling's harmless dead string was;
+//     just an outright typo with no plausible non-crashing original behavior). See `draw()` below
+//     for the full note and `rule.spec.ts` for the red→green test.
 //  2. **`initDomain()`'s "else" (neither string nor function `grid.domain`) branch references a
 //     bare, never-declared `grid` identifier too** (`value_list = grid.domain;` - every OTHER read
 //     in this same method correctly uses `this.grid.*`). Since `RuleGrid.setup()`'s own default is
@@ -609,22 +609,21 @@ export class RuleGrid extends CoreGrid {
     }
   };
 
-  /** `Draw.render()` lifecycle hook - but see header comment bug 1: unconditionally throws, always,
-   * in both the original engine and this faithful port. `CoreGrid.drawGrid()`/`top()`/`bottom()`/
-   * `left()`/`right()` are never reached via a real `draw()` call. */
+  /** `Draw.render()` lifecycle hook: the entry point that actually triggers this grid's SVG
+   * rendering, via `CoreGrid.drawGrid()` (inherited orient dispatch to `top()`/`bottom()`/`left()`/
+   * `right()` below). FIXED (was PRESERVED BUG 1, severe - see header comment): the original's own
+   * `this.drawGrid(chart, orient, "rule", grid)` read three bare, never-declared identifiers as
+   * call arguments - argument evaluation happens before the call, so reading the FIRST one
+   * (`chart`) threw `ReferenceError: chart is not defined` immediately, unconditionally, on every
+   * real `draw()` call, in the original engine. Every other concrete grid's own `draw()` (see
+   * `range.ts`/`log.ts`/`date.ts`/`block.ts` etc.) calls `this.drawGrid()` with zero arguments
+   * (`drawGrid()` never reads any argument at all, dead-STRING-argument case already adapted away
+   * elsewhere) - this file's three bare identifiers were never even valid dead arguments (unlike
+   * every sibling's harmless dead string), just an outright typo with no plausible non-crashing
+   * original behavior. Fixed to match the same zero-argument `this.drawGrid()` shape every other
+   * concrete grid uses. */
   draw = (): { root: TransElement; scale: any } => {
-    // PRESERVED BUG 1 (severe - see header comment): the original's own
-    // `this.drawGrid(chart, orient, "rule", grid)` reads three bare, never-declared identifiers
-    // as call arguments - argument evaluation happens before the call, so reading the FIRST one
-    // (`chart`) throws immediately. `this.drawGrid`/`top`/`bottom`/`left`/`right` are never
-    // reached via a real `draw()` call, in the original engine, always. Genuinely different in
-    // kind from `math.ts`'s (corrected, no-longer-throwing) `niceNum()` bug: this reads bare
-    // identifiers that were NEVER DECLARED anywhere in the file at all, which throws
-    // `ReferenceError` on read in BOTH strict and sloppy mode (unlike an undeclared-assignment
-    // typo, which only throws in strict mode - see `math.ts`'s header comment) - reproduced
-    // literally, not adapted away the way every other concrete grid's harmless dead-STRING-
-    // argument case was.
-    throw new ReferenceError("chart is not defined");
+    return this.drawGrid();
   };
 
   static setup(): Record<string, unknown> {
