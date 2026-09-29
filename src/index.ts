@@ -74,10 +74,11 @@ export { Animation } from './base/animation'
 export type { AnimationOptions } from './base/animation'
 
 // `base/map.js` ("chart.map", extend: null) - the map-chart base engine (path/polygon loading +
-// theme styling + pan/zoom state). Note: does NOT implement `AxisChart.mapType`'s
-// `MapConstructor`/`MapInstance` contract (no `render()` - see `map.ts`'s header comment for the
-// preserved upstream defect this reproduces), so it is exported standalone, not wired into
-// `Axis`/`Builder` anywhere yet.
+// theme styling + pan/zoom state). Now implements `AxisChart.mapType`'s `MapConstructor`/
+// `MapInstance` contract (a real `render()` was added as a Tier-A fix - see `map.ts`'s header
+// comment for the full "was a guaranteed crash" history), so a consumer (e.g. `jui-chart-vue`'s
+// `register/mapTypes.ts`) can wire this in as a real `Builder.mapType` - exported standalone here
+// since wiring it up is that consumer's own responsibility, same as `gridTypes`.
 export { Map } from './base/map'
 export type { MapPathDatum, MapOptions, MapChart, MapScale, MapScaleResult } from './base/map'
 
