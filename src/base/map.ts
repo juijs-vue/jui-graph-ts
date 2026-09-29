@@ -734,68 +734,82 @@ export class Map {
    * Wires the 8 `map.*` mouse events onto a single loaded path element, mirroring
    * `base/builder.ts`'s own `setCommonEvents()`/`checkPosition()` shape for `chart.*`/`bg.*`
    * events (same `$.offset(chart.root)` + `chart.padding("left"/"top")` -> `chartX`/`chartY`
-   * translation). **Preserved (not defensively guarded)**: `offset(chart.root)` can return
-   * `undefined` (see `util/dom.ts`'s `offset()`); the original unconditionally reads `pos.left`/
-   * `pos.top` right after, so a `TypeError` there is reproduced rather than guarded against.
+   * translation).
+   *
+   * FIX (Tier A defect E, previously preserved as a quirk - now closed): `offset(chart.root)` can
+   * return `undefined` (see `util/dom.ts`'s `offset()` - e.g. a detached/unmeasurable root with no
+   * `ownerDocument`); the code used to unconditionally read `pos.left`/`pos.top` right after,
+   * crashing with an uncaught `TypeError` inside every one of these 8 event handlers. A guaranteed
+   * crash nobody could depend on - fixed here: `setMouseEvent()` now returns whether it could
+   * actually resolve a position, and every handler below skips emitting its `map.*` event when it
+   * couldn't (no garbage/`NaN` coordinates handed to a listener either) - except `contextmenu`,
+   * which still calls `e.preventDefault()` regardless, preserving the "always suppress the native
+   * context menu on a map path" behavior even when the position itself is unavailable. See
+   * `map.spec.ts`'s dedicated regression tests.
    */
   private addEvent(elem: SvgElement, obj: { path: SvgElement; data: MapPathDatum }): void {
     const chart = this.chart;
 
-    const setMouseEvent = (e: any): void => {
+    const setMouseEvent = (e: any): boolean => {
       const pos = offset(chart.root);
-      const offsetX = e.pageX - pos!.left;
-      const offsetY = e.pageY - pos!.top;
+      if (!pos) return false;
+
+      const offsetX = e.pageX - pos.left;
+      const offsetY = e.pageY - pos.top;
 
       e.bgX = offsetX;
       e.bgY = offsetY;
       e.chartX = offsetX - chart.padding("left");
       e.chartY = offsetY - chart.padding("top");
+
+      return true;
     };
 
     elem.on("click", (e: any) => {
-      setMouseEvent(e);
+      if (!setMouseEvent(e)) return;
       chart.emit("map.click", [obj, e]);
     });
 
     elem.on("dblclick", (e: any) => {
-      setMouseEvent(e);
+      if (!setMouseEvent(e)) return;
       chart.emit("map.dblclick", [obj, e]);
     });
 
     elem.on("contextmenu", (e: any) => {
-      setMouseEvent(e);
-      chart.emit("map.rclick", [obj, e]);
+      const ok = setMouseEvent(e);
+      if (ok) chart.emit("map.rclick", [obj, e]);
       e.preventDefault();
     });
 
     elem.on("mouseover", (e: any) => {
-      setMouseEvent(e);
+      if (!setMouseEvent(e)) return;
       chart.emit("map.mouseover", [obj, e]);
     });
 
     elem.on("mouseout", (e: any) => {
-      setMouseEvent(e);
+      if (!setMouseEvent(e)) return;
       chart.emit("map.mouseout", [obj, e]);
     });
 
     elem.on("mousemove", (e: any) => {
-      setMouseEvent(e);
+      if (!setMouseEvent(e)) return;
       chart.emit("map.mousemove", [obj, e]);
     });
 
     elem.on("mousedown", (e: any) => {
-      setMouseEvent(e);
+      if (!setMouseEvent(e)) return;
       chart.emit("map.mousedown", [obj, e]);
     });
 
     elem.on("mouseup", (e: any) => {
-      setMouseEvent(e);
+      if (!setMouseEvent(e)) return;
       chart.emit("map.mouseup", [obj, e]);
     });
   }
 
   // -----------------------------------------------------------------------------------------
-  // Public API - kept 1:1 with the original. NOTE: no `render()` - see header comment.
+  // Public API. `draw()`/`drawAfter()` kept 1:1 with the original; `render()` (below) is this
+  // port's own Tier-A fix bridging them - see the header comment's "headline finding" update.
   // -----------------------------------------------------------------------------------------
 
   /**

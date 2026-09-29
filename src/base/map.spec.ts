@@ -911,4 +911,45 @@ describe("addEvent", () => {
       }
     }
   });
+
+  it("FIX (Tier A defect E - was: offset(chart.root) returning undefined, e.g. for a detached/" +
+    "unmeasurable root, crashed with an uncaught TypeError reading pos.left/pos.top): a missing " +
+    "position no longer throws - the event is safely skipped instead of emitting garbage coordinates", () => {
+    const { chart, emit } = makeChart();
+    // A plain object has no `ownerDocument`, so `offset()` (util/dom.ts) hits its own `if (!doc)
+    // return;` guard and returns `undefined` - the exact scenario this defect never handled.
+    chart.root = {} as unknown as HTMLElement;
+    const axis = makeAxis(chart);
+    const map = makeMap(chart, axis) as any;
+
+    const pathElem = chart.svg.path({ id: "p1" });
+    const entry = { path: pathElem, data: { id: "p1" } };
+    map.addEvent(pathElem, entry);
+
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "pageX", { value: 100, configurable: true });
+    Object.defineProperty(event, "pageY", { value: 50, configurable: true });
+
+    expect(() => pathElem.element.dispatchEvent(event)).not.toThrow();
+    // Skips the event entirely rather than emitting with garbage/NaN coordinates.
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it("still preventDefault()s a contextmenu event even when the position can't be resolved", () => {
+    const { chart } = makeChart();
+    chart.root = {} as unknown as HTMLElement;
+    const axis = makeAxis(chart);
+    const map = makeMap(chart, axis) as any;
+
+    const pathElem = chart.svg.path({ id: "p1" });
+    map.addEvent(pathElem, { path: pathElem, data: { id: "p1" } });
+
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "pageX", { value: 0, configurable: true });
+    Object.defineProperty(event, "pageY", { value: 0, configurable: true });
+    const preventDefaultSpy = vi.spyOn(event, "preventDefault");
+
+    expect(() => pathElem.element.dispatchEvent(event)).not.toThrow();
+    expect(preventDefaultSpy).toHaveBeenCalled();
+  });
 });
