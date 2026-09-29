@@ -124,6 +124,22 @@ import { radian } from "../util/math";
 // exists in this port) --------------------------------------------------------------------------
 type TypeCheckable = unknown;
 
+/** Tier A fix (defect 6 - same root defect family as `grid3d.ts`'s defect 5): resolves
+ * `axis.degree` to a genuine, finite NUMBER before it's used in `radian(360 - degree)`-shaped
+ * arithmetic below. See `grid3d.ts`'s own `resolveDegree()` doc comment for the full reasoning
+ * (Node/legacy-source-cross-checked: the real engine has no existing convention anywhere for
+ * reducing the raw `{x,y,z}` config object to a single scalar for this kind of 2D-angle math -
+ * `degree.z` is picked arbitrarily but applied consistently at both of this port's
+ * degree-object-coerced-to-NaN call sites). Duplicated per-file rather than shared, matching this
+ * port's own established per-file-inlined-helper convention (see `typeCheck`/`extend` above). */
+function resolveDegree(degree: unknown): number {
+  if (typeof degree === "number") return degree;
+  if (degree && typeof degree === "object" && typeof (degree as { z?: unknown }).z === "number") {
+    return (degree as { z: number }).z;
+  }
+  return 0;
+}
+
 function typeCheck(type: string | string[], value: TypeCheckable): boolean {
   function check(t: string, v: TypeCheckable): boolean {
     if (typeof t !== "string") return false;
@@ -312,8 +328,8 @@ export class CoreGrid extends Draw implements GridInstance {
   /** The grid line's own start/size/end extent along its perpendicular axis (e.g. a `"left"`/
    * `"right"`-oriented grid's vertical extent comes from `axis.area("y")`/`"height"`, a `"top"`/
    * `"bottom"` one from `"x"`/`"width"`) - used to size the grid's own border/tick lines. See the
-   * inline comment just below on a real, preserved `NaN`-poisoning bug in the 3D-rotation branch
-   * this method's non-full-3D case can hit. */
+   * inline comment just below for a Tier A fix (defect 6) to a `NaN`-poisoning bug the
+   * 3D-rotation branch's non-full-3D case used to hit for an object-shaped `axis.degree`. */
   getGridSize(): { start: number; size: number; end: number } {
     const orient = (this.grid as Record<string, unknown>).orient as string;
     const depth = this.axis.depth;
@@ -327,30 +343,35 @@ export class CoreGrid extends Draw implements GridInstance {
     const result = { start, size, end };
 
     if (!this.axis.isFull3D()) {
-      // CORRECTED framing (was previously documented here as producing `NaN` in "every real
-      // case" - that overstated it, see below): `depth > 0 || degree > 0` compares `degree`
-      // against the number `0` - when `degree` genuinely IS an object (`{x,y,z}`, the shape
-      // `Axis.setup()`'s own documented default uses), JS's abstract relational comparison
-      // coerces it via `ToPrimitive`/`ToNumber` (no custom `valueOf`, falls through to
-      // `toString()` -> `"[object Object]"` -> `NaN`), so `degree > 0` is `false` and, if this
-      // branch runs anyway (because `depth > 0`), `math.radian(360 - degree)` performs the SAME
-      // coercion (`360 - NaN` = `NaN`) - `x2`/`y2` below are `NaN`, silently poisoning
-      // `result.start`/`result.size`/`result.end`. This part IS a real, preserved bug (confirmed
-      // byte-identical in the real engine's own `chart.js` - same `_.extend`/coercion behavior),
-      // reachable whenever a 2D (non-full-3D) grid shares an axis with an ACTUAL object-shaped
-      // `degree` config.
+      // FIXED (Tier A defect 6) - was documented here as a preserved bug: `depth > 0 || degree >
+      // 0` used to compare the raw `degree` value against the number `0` - when `degree`
+      // genuinely IS an object (`{x,y,z}`, the shape `Axis.setup()`'s own documented default
+      // uses), JS's abstract relational comparison coerces it via `ToPrimitive`/`ToNumber` (no
+      // custom `valueOf`, falls through to `toString()` -> `"[object Object]"` -> `NaN`), so
+      // `degree > 0` was `false` and, if this branch ran anyway (because `depth > 0`),
+      // `math.radian(360 - degree)` performed the SAME coercion (`360 - NaN` = `NaN`) - `x2`/`y2`
+      // below were `NaN`, silently poisoning `result.start`/`result.size`/`result.end`. Confirmed
+      // byte-identical in the real engine's own `chart.js`/`grid/core.js` (Node/legacy-source-
+      // cross-checked directly - same `_.extend`/coercion behavior, no existing fallback anywhere
+      // in the original for this exact object-shaped case) - reachable whenever a 2D (non-full-3D)
+      // grid shares an axis with an ACTUAL object-shaped `degree` config, i.e. the default,
+      // un-overridden case.
       //
-      // But `degree` is NOT always an object in practice - the extremely common case (the
+      // `degree` is NOT always an object in practice - the extremely common case (the
       // `bar3d`/`column3d`/`cylinder3d`/`bubble3d`/cluster/stack/fullstack family's own top-level
-      // `degree: 30`-style numeric config) is a real NUMBER here, and this branch handles that
-      // correctly (`30 > 0` is `true`, `radian(360-30)` is a real angle, `x2`/`y2` are real
+      // `degree: 30`-style numeric config) is a real NUMBER here, and this branch already handled
+      // that correctly (`30 > 0` is `true`, `radian(360-30)` is a real angle, `x2`/`y2` are real
       // numbers) - see `base/axis.ts`'s `degree` field doc comment for the GENUINE PORT
       // REGRESSION (now fixed) that used to make this TS port's `Axis.degree` wrongly stay an
       // object even for a numeric config, poisoning this exact branch with `NaN` for that whole
-      // brush family. Tested (both the still-preserved object-degree `NaN` case and the
-      // now-correct numeric-degree case).
-      if (depth > 0 || (degree as unknown as number) > 0) {
-        const rad = radian(360 - (degree as unknown as number));
+      // brush family. Now: `resolveDegree()` (see above) resolves the object-shaped case to a
+      // real, finite number (`degree.z`) instead of leaving it to coerce to `NaN` - same fix
+      // (same helper design, applied consistently) as `grid3d.ts`'s own defect-5 fix. Tested (both
+      // the now-fixed object-degree case and the already-correct numeric-degree case).
+      const degreeNum = resolveDegree(degree);
+
+      if (depth > 0 || degreeNum > 0) {
+        const rad = radian(360 - degreeNum);
         const x2 = Math.cos(rad) * depth;
         const y2 = Math.sin(rad) * depth;
 

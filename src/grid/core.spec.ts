@@ -4,6 +4,7 @@ import type { GridChart } from "./core";
 import type { Axis, AxisChart, AreaBox, GridConstructor } from "../base/axis";
 import { SVG } from "../util/svg";
 import type { TransElement } from "../util/svg/element.transform";
+import { radian } from "../util/math";
 
 // ---------------------------------------------------------------------------------------------
 // Test doubles - ordinary unit-test fixtures satisfying `GridChart`/`Axis`'s real structural
@@ -220,23 +221,40 @@ describe("CoreGrid", () => {
     });
 
     it(
-      "PRESERVED BUG: depth>0 with !isFull3D() produces NaN, because `degree > 0` compares the " +
-        "whole {x,y,z} object (always false/NaN via ToNumber), not a numeric degree field",
+      "fixed (Tier A defect 6): depth>0 with !isFull3D() and a standard {x,y,z} degree object no longer produces NaN - resolves via degree.z instead of coercing the whole object",
       () => {
         const g = new CoreGrid();
         g.grid = makeGrid({ orient: "left" });
         g.axis = makeAxisStub({
           area: { x: 0, y: 0, x2: 100, y2: 100, width: 100, height: 100 },
           depth: 50,
+          degree: { x: 0, y: 0, z: 0 },
           isFull3D: false,
         });
 
         const result = g.getGridSize();
-        expect(Number.isNaN(result.start)).toBe(true);
-        expect(Number.isNaN(result.size)).toBe(true);
+        expect(Number.isFinite(result.start)).toBe(true);
+        expect(Number.isFinite(result.size)).toBe(true);
         expect(result.end).toBe(100); // untouched by the "left" branch
       },
     );
+
+    it("fixed (Tier A defect 6): a NON-uniform {x,y,z} degree object resolves via degree.z specifically", () => {
+      const g = new CoreGrid();
+      g.grid = makeGrid({ orient: "bottom" });
+      g.axis = makeAxisStub({
+        area: { x: 0, y: 0, x2: 100, y2: 100, width: 100, height: 100 },
+        depth: 50,
+        degree: { x: 11, y: 22, z: 33 },
+        isFull3D: false,
+      });
+
+      const rad = radian(360 - 33);
+      const expectedX2 = Math.cos(rad) * 50;
+
+      const result = g.getGridSize();
+      expect(result.end).toBeCloseTo(100 - expectedX2, 10);
+    });
 
     it("leaves start/size/end untouched when depth===0 and !isFull3D() (the common case)", () => {
       const g = new CoreGrid();
