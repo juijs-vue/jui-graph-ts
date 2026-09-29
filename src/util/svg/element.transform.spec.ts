@@ -82,7 +82,7 @@ describe("TransElement", () => {
     });
 
     describe("data()", () => {
-        it("fixed: extracts and parses this command's own parenthesized args (single component)", () => {
+        it("fixed: extracts this command's own parenthesized args as a raw string (single component)", () => {
             const el = makeTrans();
             el.translate(1, 2);
             const text = el.attr("transform") as string;
@@ -92,8 +92,10 @@ describe("TransElement", () => {
             // individual letters of its own name (e.g. `/[^translate()]+/g`), which coincidentally
             // produced the right-looking answer here (there being only one component to confuse it
             // with) but was not actually matching "the substring inside this command's parens" -
-            // see the test below for where that mixup broke down for real.
-            expect(el.data("translate")).toEqual([1, 2]);
+            // see the test below for where that mixup broke down for real. Checked against the
+            // real legacy source (jui-graph's util/svg/element.transform.js): `data()` always
+            // returns the raw matched STRING, never a parsed number/array - preserved here.
+            expect(el.data("translate")).toBe("1,2");
         });
 
         it("returns null when no transform attribute is set", () => {
@@ -111,8 +113,8 @@ describe("TransElement", () => {
             el.rotate(30);
             expect(el.element.getAttribute("transform")).toBe("translate(1,2) rotate(30)");
 
-            expect(el.data("rotate")).toBe(30);
-            expect(el.data("translate")).toEqual([1, 2]);
+            expect(el.data("rotate")).toBe("30");
+            expect(el.data("translate")).toBe("1,2");
         });
     });
 });

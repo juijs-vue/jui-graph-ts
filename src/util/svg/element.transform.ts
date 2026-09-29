@@ -97,7 +97,7 @@ export class TransElement extends Element {
   }
 
   /**
-   * Extracts and parses one transform component's argument list out of the current `transform`
+   * Extracts one transform component's raw argument text out of the current `transform`
    * attribute.
    *
    * **Fixed (Tier A - data-corrupting defect)**: each regex used to be a negated CHARACTER CLASS
@@ -109,23 +109,24 @@ export class TransElement extends Element {
    * `translate`/`rotate` both use "t"/"r"/"a"), the match crossed into the wrong component's text
    * and returned nonsense (verified: garbage output, not even a thrown error, on
    * `"translate(1,2) rotate(30)"`). Now matches the named command's own parenthesized argument
-   * list specifically (`` `${type}\(([^)]*)\)` ``) and parses its numeric argument(s), returning
-   * a single number for a one-argument component or a number array for a multi-argument one.
+   * list specifically (`` `${type}\(([^)]*)\)` ``) instead.
+   *
+   * Return type note (checked against the real legacy source, `jui-graph`'s own
+   * `util/svg/element.transform.js`): the original's `data()` always returns the raw matched
+   * STRING (`text.match(regex[type])[0]`) - it never parses the text into a number or array. An
+   * earlier version of this fix incorrectly also changed the return shape to `number | number[]`;
+   * that's been reverted here to keep returning the raw string (e.g. `"30"` for `rotate`, `"1,2"`
+   * for `translate`), matching the original's actual behavior - only the extraction bug itself is
+   * fixed, not the return type.
    */
-  data(type: TransformKey): number | number[] | null {
+  data(type: TransformKey): string | null {
     const text = this.attr("transform");
 
     if (typeof text !== "string") return null;
 
     const match = text.match(new RegExp(`${type}\\(([^)]*)\\)`));
-    if (!match) return null;
 
-    const nums = match[1]
-      .split(/[\s,]+/)
-      .filter((part) => part.length > 0)
-      .map(Number);
-
-    return nums.length === 1 ? nums[0] : nums;
+    return match ? match[1] : null;
   }
 }
 
