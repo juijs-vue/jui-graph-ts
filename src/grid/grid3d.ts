@@ -36,25 +36,27 @@
 // dependency on unported Phase D files" contingency this task was briefed to consider does not
 // apply here.
 //
-// **A severe, previously-undocumented bug found and preserved, Node-cross-checked (see
-// `grid3d.spec.ts`)**: `drawBefore()`'s `degree = this.axis.get("depth")`... more precisely
-// `degree = this.axis.get("degree")` - `Axis.get("degree")` (per `base/axis.ts`, already shipped)
-// is not one of the four private-state keys `get()` special-cases (`area`/`padding`/`clipId`/
-// `clipRectId`), so it falls through to `this.cloneAxis["degree"]` - the RAW CONFIG value, whose
-// documented/default shape (per `Axis.setup()`, already shipped: `degree: {x:0,y:0,z:0}`) is an
-// OBJECT, not a number. `radian = math.radian(360 - degree)` then computes `360 - {x,y,z}` -
-// JS's `ToPrimitive`/`ToNumber` coercion on the object (no custom `valueOf`, falls through to
-// `toString()` -> `"[object Object]"` -> `NaN`) makes this `NaN` in EVERY real, standard-schema
+// **FIXED (Tier A defect 5) - was a severe, previously-undocumented bug, Node-cross-checked (see
+// `grid3d.spec.ts`)**: `drawBefore()`'s `degree = this.axis.get("degree")` - `Axis.get("degree")`
+// (per `base/axis.ts`, already shipped) is not one of the four private-state keys `get()`
+// special-cases (`area`/`padding`/`clipId`/`clipRectId`), so it falls through to
+// `this.cloneAxis["degree"]` - the RAW CONFIG value, whose documented/default shape (per
+// `Axis.setup()`, already shipped: `degree: {x:0,y:0,z:0}`) is an OBJECT, not a number. The old
+// `radian = math.radian(360 - degree)` computed `360 - {x,y,z}` directly - JS's
+// `ToPrimitive`/`ToNumber` coercion on the object (no custom `valueOf`, falls through to
+// `toString()` -> `"[object Object]"` -> `NaN`) made this `NaN` in EVERY real, standard-schema
 // configuration (Node-verified: `360 - {x:0,y:0,z:0}` is exactly `NaN`, not a thrown error) -
-// `math.radian(NaN)` is `NaN` too. This is the SAME category of bug `grid/core.ts`'s
-// `getGridSize()` already documented (`degree > 0` object-vs-number coercion), but a DIFFERENT
-// code path (`axis.get("degree")` here vs. the live `axis.degree` FIELD there) and a much more
-// severe consequence: `this.radian` (poisoned to `NaN`) feeds directly into `draw()`'s `x2`/`y2`
-// depth-line-endpoint computation (`Math.sin(radian)*depth`/`Math.cos(radian)*depth`, both always
-// `NaN`) AND into `this.scale`'s own multi-step z-projection branch (`Math.cos(radian)*c`/
-// `Math.sin(radian)*c`) - meaning `Grid3D`'s entire depth-line rendering and z-axis projection are
-// silently broken (`NaN` coordinates) for any chart using the standard `axis.degree` config
-// object, not a contrived edge case. Preserved exactly, not fixed, per Phase 0 rule 6.
+// `math.radian(NaN)` was `NaN` too. This is the SAME category of bug `grid/core.ts`'s
+// `getGridSize()` also had (`degree > 0` object-vs-number coercion, fixed alongside this one - see
+// that file's own header/doc-comment update), but a DIFFERENT code path (`axis.get("degree")` here
+// vs. the live `axis.degree` FIELD there) and a much more severe consequence: `this.radian`
+// (poisoned to `NaN`) fed directly into `draw()`'s `x2`/`y2` depth-line-endpoint computation
+// (`Math.sin(radian)*depth`/`Math.cos(radian)*depth`, both always `NaN`) AND into `this.scale`'s
+// own multi-step z-projection branch (`Math.cos(radian)*c`/`Math.sin(radian)*c`) - meaning
+// `Grid3D`'s entire depth-line rendering and z-axis projection were silently broken (`NaN`
+// coordinates) for any chart using the standard `axis.degree` config object, not a contrived edge
+// case. Tier A (not preserved): `resolveDegree()` (see below) now resolves this to a real, finite
+// number before it reaches `radian(360 - degree)`.
 
 import { CoreGrid } from "./core";
 import type { GridChart } from "./core";
@@ -66,6 +68,29 @@ import type { Element } from "../util/svg/element";
 // in this port) -------------------------------------------------------------------------------
 function typeCheckInteger(value: unknown): boolean {
   return typeof value === "number" && value % 1 === 0;
+}
+
+/** Tier A fix (defects 5/6 - this file's `drawBefore()` and `grid/core.ts`'s `getGridSize()`,
+ * the same root defect family): resolves `axis.get("degree")`/`axis.degree` to a genuine, finite
+ * NUMBER before it's used in `radian(360 - degree)`-shaped arithmetic. When `degree` is already a
+ * plain number (the majority real-world config - e.g. every `bar3d`/`column3d`/`cylinder3d`/
+ * `bubble3d`/cluster/stack/fullstack brush family's own top-level `degree: 30`-style config, per
+ * `base/axis.ts`'s own doc comment on that regression fix), it's returned unchanged. When it's the
+ * raw `{x,y,z}` object `Axis.setup()`'s own documented/default shape uses (an unconfigured
+ * `axis.degree`, or a full-3D-rotation config), no single component is uniquely "correct" for this
+ * single-angle 2D math - `base/draw.ts`'s own `calculate3d()` is the one place that legitimately
+ * needs all three components independently, for real 3D rotation, and neither this call site nor
+ * `grid/core.ts`'s is that. Picking `degree.z` (arbitrary among the three, but applied consistently
+ * at every one of this port's `degree`-as-object-coerced-to-NaN call sites) at least yields a real,
+ * finite number instead of `NaN` - the common unconfigured `{x:0,y:0,z:0}` case resolves to `0`,
+ * matching this same field's own plain-number-config default (`Axis.js`'s original `@cfg {Number}
+ * [degree=0]`). */
+function resolveDegree(degree: unknown): number {
+  if (typeof degree === "number") return degree;
+  if (degree && typeof degree === "object" && typeof (degree as { z?: unknown }).z === "number") {
+    return (degree as { z: number }).z;
+  }
+  return 0;
 }
 
 /** The shape `this.axis.x`/`this.axis.y` are ACTUALLY rendered into by the time a `Grid3D`
@@ -155,7 +180,7 @@ export class Grid3D extends CoreGrid {
   drawBefore = (): void => {
     this.depth = this.axis.get("depth") as number;
     this.degree = this.axis.get("degree");
-    this.radian = radian(360 - (this.degree as unknown as number));
+    this.radian = radian(360 - resolveDegree(this.degree));
 
     const axis = this.axis;
     const depth = this.depth;

@@ -91,17 +91,28 @@ describe("Grid3D", () => {
   });
 
   describe("drawBefore", () => {
-    it("preserved bug: standard axis.degree object ({x,y,z}) poisons radian to NaN (Node-cross-checked)", () => {
+    it("fixed (Tier A defect 5): standard axis.degree object ({x,y,z}) no longer poisons radian to NaN - resolves via degree.z instead of coercing the raw object", () => {
       const { g } = makeGrid3D({}, { get: (type) => (type === "depth" ? 10 : type === "degree" ? { x: 0, y: 0, z: 0 } : undefined) });
 
       g.drawBefore();
 
       expect((g as any).depth).toBe(10);
       expect((g as any).degree).toEqual({ x: 0, y: 0, z: 0 });
-      expect((g as any).radian).toBeNaN();
-      expect((g.scale as any).radian).toBeNaN();
+      expect((g as any).radian).not.toBeNaN();
+      expect((g as any).radian).toBeCloseTo(radian(360 - 0), 10);
+      expect((g.scale as any).radian).not.toBeNaN();
       expect((g.scale as any).depth).toBe(10);
+      // `scale.degree` still carries the RAW resolved value (unchanged shape/consumers elsewhere -
+      // only the internal `radian` computation was fixed to use a real number).
       expect((g.scale as any).degree).toEqual({ x: 0, y: 0, z: 0 });
+    });
+
+    it("fixed (Tier A defect 5): a NON-uniform axis.degree object resolves radian via degree.z specifically (not .x/.y)", () => {
+      const { g } = makeGrid3D({}, { get: (type) => (type === "depth" ? 10 : type === "degree" ? { x: 11, y: 22, z: 33 } : undefined) });
+
+      g.drawBefore();
+
+      expect((g as any).radian).toBeCloseTo(radian(360 - 33), 10);
     });
 
     it("with an atypical numeric axis.degree override, radian is computed correctly (confirms the bug is object-vs-number coercion, not a hard crash)", () => {
