@@ -97,31 +97,35 @@ export class TransElement extends Element {
   }
 
   /**
-   * Extracts one transform component's raw text out of the current `transform` attribute.
+   * Extracts and parses one transform component's argument list out of the current `transform`
+   * attribute.
    *
-   * **Preserved bug**: each regex is a negated CHARACTER CLASS built from the individual
-   * letters of its own name plus parens - e.g. `translate: /[^translate()]+/g` means "one or
-   * more characters that are none of the letters t/r/a/n/s/l/e or ( or )", which is nothing
-   * like matching the substring `"translate(...)"`. This is a classic `[^...]` vs. a real
-   * "strip this token" pattern mixup in the original, reproduced byte-for-byte (including that
-   * `text.match(regex)` can return `null` and `[0]` on that throws, same as the original - no
-   * added guard).
+   * **Fixed (Tier A - data-corrupting defect)**: each regex used to be a negated CHARACTER CLASS
+   * built from the individual letters of its own name plus parens - e.g.
+   * `translate: /[^translate()]+/g` means "one or more characters that are none of the letters
+   * t/r/a/n/s/l/e or ( or )", which is nothing like matching the substring `"translate(...)"`.
+   * That happened to look right when only ONE transform component was ever set (nothing else to
+   * confuse the negated class with), but when multiple components share letters (e.g.
+   * `translate`/`rotate` both use "t"/"r"/"a"), the match crossed into the wrong component's text
+   * and returned nonsense (verified: garbage output, not even a thrown error, on
+   * `"translate(1,2) rotate(30)"`). Now matches the named command's own parenthesized argument
+   * list specifically (`` `${type}\(([^)]*)\)` ``) and parses its numeric argument(s), returning
+   * a single number for a one-argument component or a number array for a multi-argument one.
    */
-  data(type: TransformKey): string | null {
+  data(type: TransformKey): number | number[] | null {
     const text = this.attr("transform");
-    const regex: Record<TransformKey, RegExp> = {
-      translate: /[^translate()]+/g,
-      rotate: /[^rotate()]+/g,
-      scale: /[^scale()]+/g,
-      skew: /[^skew()]+/g,
-      matrix: /[^matrix()]+/g,
-    };
 
-    if (typeof text === "string") {
-      return text.match(regex[type])![0];
-    }
+    if (typeof text !== "string") return null;
 
-    return null;
+    const match = text.match(new RegExp(`${type}\\(([^)]*)\\)`));
+    if (!match) return null;
+
+    const nums = match[1]
+      .split(/[\s,]+/)
+      .filter((part) => part.length > 0)
+      .map(Number);
+
+    return nums.length === 1 ? nums[0] : nums;
   }
 }
 

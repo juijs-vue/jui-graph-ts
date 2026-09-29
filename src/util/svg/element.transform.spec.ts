@@ -82,22 +82,37 @@ describe("TransElement", () => {
     });
 
     describe("data()", () => {
-        it("preserved bug: regex is a negated character class, not a real token matcher", () => {
+        it("fixed: extracts and parses this command's own parenthesized args (single component)", () => {
             const el = makeTrans();
             el.translate(1, 2);
             const text = el.attr("transform") as string;
             expect(text).toBe("translate(1,2)");
 
-            // /[^translate()]+/g matches runs of characters that are NOT any of the letters in
-            // "translate()" (t/r/a/n/s/l/e/(/)) - against "translate(1,2)" that's just the
-            // digits/comma, i.e. "1,2", not a stripped-down "1,2)" or the whole call. Verified
-            // by hand-trace + Node-cross-check against the literal upstream regex.
-            expect(el.data("translate")).toBe("1,2");
+            // Previously (preserved bug), each regex was a negated CHARACTER CLASS built from the
+            // individual letters of its own name (e.g. `/[^translate()]+/g`), which coincidentally
+            // produced the right-looking answer here (there being only one component to confuse it
+            // with) but was not actually matching "the substring inside this command's parens" -
+            // see the test below for where that mixup broke down for real.
+            expect(el.data("translate")).toEqual([1, 2]);
         });
 
         it("returns null when no transform attribute is set", () => {
             const el = makeTrans();
             expect(el.data("translate")).toBeNull();
+        });
+
+        it("fixed: correctly reads each component when multiple transform components share letters", () => {
+            const el = makeTrans();
+            // translate() and rotate() share letters ("t", "r", "a") - the old negated-character-
+            // class regex would match across component boundaries here and return garbage (or
+            // throw, on no match at all). The full transform string ends up
+            // "translate(1,2) rotate(30)" (fixed translate/scale/rotate/skew/matrix ordering).
+            el.translate(1, 2);
+            el.rotate(30);
+            expect(el.element.getAttribute("transform")).toBe("translate(1,2) rotate(30)");
+
+            expect(el.data("rotate")).toBe(30);
+            expect(el.data("translate")).toEqual([1, 2]);
         });
     });
 });
