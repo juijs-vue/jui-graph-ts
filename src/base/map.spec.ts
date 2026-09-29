@@ -284,9 +284,10 @@ describe("getStyleObj (via loadArray)", () => {
     expect(Object.keys(result[0].path.attributes)).not.toContain("garbage");
   });
 
-  it("preserved bug (genuinely new finding, Node-cross-checked - see trim()'s doc comment): a " +
-    "space before a ':'/';' delimiter truncates the last character of that key/value", () => {
-    const { chart } = makeChart();
+  it("FIX (Tier A defect B - was: a space before a ':'/';' delimiter truncated the last real " +
+    "character of that key/value, e.g. trim('blue ') -> 'blu' - see trim()'s doc comment): every " +
+    "key/value survives intact regardless of delimiter-adjacent whitespace", () => {
+    const { chart, themeValues } = makeChart();
     const axis = makeAxis(chart);
     const map = makeMap(chart, axis);
 
@@ -295,14 +296,28 @@ describe("getStyleObj (via loadArray)", () => {
     // end-of-string, which trim() ALSO treats as "trailing whitespace to strip").
     const result = (map as any).loadArray([{ id: "p1", d: "M0 0", style: " fill : blue ; opacity:0.5 " }]);
 
-    // "fill" -> "fil" (space before ':' truncates the KEY too, not just values) and its value
-    // "blue" -> "blu". Since "fil" is not a real SVG presentation attribute, it's simply set as
-    // a harmless custom attribute - it does NOT become the element's real `fill`.
-    expect(result[0].path.attributes.fil).toBe("blu");
-    expect(result[0].path.attributes.fill).not.toBe("blu"); // theme's fill wins here regardless
-    // "opacity" has no space before its ':', so the key is unaffected - but its value "0.5 " has
-    // a trailing space before the end of the string, so it still gets truncated to "0.".
-    expect(result[0].path.attributes.opacity).toBe("0.");
+    // "fill"/"blue" both survive fully intact now (previously "fil"/"blu") - but the theme's own
+    // fill still wins over the inline style's real "fill" key (a DIFFERENT, still-preserved quirk
+    // - see loadArray()'s own doc comment), so the attribute value is the theme color, not "blue".
+    expect(result[0].path.attributes.fill).toBe(themeValues.mapPathBackgroundColor);
+    expect(result[0].path.attributes.fill).not.toBe("blue");
+    // "opacity" (no delimiter-adjacent whitespace issue on the key) and its value "0.5" (trailing
+    // space before end-of-string correctly stripped, no truncation of the "5").
+    expect(result[0].path.attributes.opacity).toBe("0.5");
+  });
+
+  it("FIX regression coverage: a single trailing space, or a multi-space run, no longer eats the " +
+    "preceding real character (trim('blue ') -> 'blue', not 'blu'; trim('ab  ') -> 'ab', not 'a')", () => {
+    const { chart } = makeChart();
+    const axis = makeAxis(chart);
+    const map = makeMap(chart, axis);
+
+    const result = (map as any).loadArray([
+      { id: "p1", d: "M0 0", style: "stroke-dasharray:blue ;other-prop:ab  " },
+    ]);
+
+    expect(result[0].path.attributes["stroke-dasharray"]).toBe("blue");
+    expect(result[0].path.attributes["other-prop"]).toBe("ab");
   });
 });
 

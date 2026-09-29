@@ -160,29 +160,33 @@ function extend(origin: unknown, add: unknown, skip?: boolean): Record<string, u
 }
 
 /**
- * `_.trim(text)` ported verbatim from `util/base.js` - NOT a safe stand-in for `String.trim()`.
+ * `_.trim(text)` ported from `util/base.js`.
  *
- * **Genuine, previously-undocumented bug, Node-cross-checked against the literal original (not
- * assumed from reading the regex once)**: whenever `text` has ANY trailing whitespace to strip,
- * this also eats the one real (non-whitespace) character immediately before that whitespace run -
- * silently truncating the string. E.g. `trim("0.5 ")` -> `"0."` (not `"0.5"`); `trim("blue ")` ->
- * `"blu"`; `trim("ab  ")` -> `"a"` (eats the char even across a multi-space run); `trim("a ")` ->
- * `""` (the whole thing). Leading whitespace strips correctly with no such loss, and a string with
- * NO trailing whitespace at all is untouched (`trim("blue")` -> `"blue"`). Root cause: the trailing
- * alternative of the regex (`((?:^|[^\\])(?:\\.)*)` + whitespace + `"$"`, meant to avoid trimming
- * an escaped trailing space) captures one extra leading character as PART of the match it's
- * matching against, and `.replace(rtrim, "")` deletes the ENTIRE match - group included - not just
- * the trailing-whitespace portion. `getStyleObj()` below feeds every parsed style value/key
- * through this, so any `style="..."` string authored with a space before a `:`/`;` delimiter (or
- * a trailing space at the very end) silently loses the last character of that token. Preserved
- * exactly (not fixed) - see `map.spec.ts`'s dedicated `trim` regression coverage (via
- * `getStyleObj`).
+ * FIX (Tier A defect B, previously a genuine, previously-undocumented bug - Node-cross-checked
+ * against the literal original, not assumed from reading the regex once): the regex itself is a
+ * well-known pattern (Sizzle's own selector-trimming `rtrim`) whose trailing alternative
+ * (`((?:^|[^\\])(?:\\.)*)` + whitespace + `"$"`) deliberately captures the one non-whitespace
+ * character immediately before a trailing whitespace run into group 1, specifically so a caller
+ * can restore it via `.replace(rtrim, "$1")` - that's what makes the "avoid trimming an escaped
+ * trailing space" logic work at all. This port's `.replace(rtrim, "")` (no replacement group) was
+ * a transcription bug: it deleted the ENTIRE match - captured character included - not just the
+ * trailing-whitespace portion, so any string with trailing/delimiter-adjacent whitespace silently
+ * lost its last real character (e.g. `trim("blue ")` -> `"blu"`, `trim("0.5 ")` -> `"0."`,
+ * `trim("ab  ")` -> `"a"` even across a multi-space run, `trim("a ")` -> `""`). `getStyleObj()`
+ * below feeds every parsed style value/key through this, corrupting any real `style="..."` CSS
+ * value authored with a space before a `:`/`;` delimiter (or a trailing space at the end) - a Tier
+ * A defect (silent data corruption of real CSS colors/values), not a "look" any real demo could
+ * depend on, so fixed here (not preserved): the fix is simply the corrected substitution,
+ * `.replace(rtrim, "$1")`, restoring the character the regex captures for exactly that purpose -
+ * leading whitespace (matched by the OTHER alternative, no capture group) still strips to `""` as
+ * before, and a string with no trailing whitespace at all is still untouched. See `map.spec.ts`'s
+ * `getStyleObj`/`loadArray` regression coverage.
  */
 function trim(text: unknown): string {
   const whitespace = "[\\x20\\t\\r\\n\\f]";
   const rtrim = new RegExp("^" + whitespace + "+|((?:^|[^\\\\])(?:\\\\.)*)" + whitespace + "+$", "g");
 
-  return text == null ? "" : (text + "").replace(rtrim, "");
+  return text == null ? "" : (text + "").replace(rtrim, "$1");
 }
 
 /**
@@ -473,11 +477,10 @@ export class Map {
 
   /**
    * `str.split(";")` -> `key:value` pairs, trimmed via `trim()`. Any segment without a `:` is
-   * silently skipped. **Inherits `trim()`'s truncation bug** (see that function's doc comment):
-   * a key or value with a trailing space before its `:`/`;` delimiter (or at the very end of
-   * `str`) loses its last character, e.g. `"fill: red ; stroke: blue"` parses to
-   * `{fill: "re", stroke: "blue"}` - the first value's trailing space (before the `;`) triggers
-   * it, the second (last token, no trailing space before end-of-string) doesn't.
+   * silently skipped. Since `trim()`'s own truncation bug is fixed (see that function's doc
+   * comment), a key or value with a trailing space before its `:`/`;` delimiter (or at the very
+   * end of `str`) survives fully intact, e.g. `"fill: red ; stroke: blue"` now correctly parses to
+   * `{fill: "red", stroke: "blue"}`.
    */
   private getStyleObj(str: string): Record<string, string> {
     const style: Record<string, string> = {};
