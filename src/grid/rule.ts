@@ -22,10 +22,12 @@
 // despite its JSDoc block's confusingly-bare `@method axisLine` LABEL documenting that
 // differently-named method, not this one). **Conclusion: this file has NO real Phase D
 // dependency, resolved and verified precisely, not assumed from either prior claim - ported fully
-// now**, per this task's own instructions. What IS real, and preserved rather than "fixed" or
-// silently worked around, is the severe upstream bug this false trail leads to: `this.axisLine(
-// ...)` throws `TypeError: this.axisLine is not a function` on every real call, in the original
-// engine, always - see the field declaration and `top()`/`bottom()`/`left()`/`right()` below.
+// now**, per this task's own instructions. What IS real is the severe upstream bug this false
+// trail leads to: `this.axisLine(...)` threw `TypeError: this.axisLine is not a function` on every
+// real call, in the original engine, always, since no method of that exact name/signature existed
+// anywhere - FIXED here (Tier A: an outright crash nobody could depend on) by implementing a real
+// `axisLine()` method rather than aliasing it to either differently-shaped `drawAxisLine` - see the
+// method itself and `top()`/`bottom()`/`left()`/`right()` below.
 //
 // ============================================================================================
 // `RuleGrid` WAS a genuinely, severely, MULTIPLY broken class in the real original engine - three
@@ -62,18 +64,19 @@
 //     `this.grid.domain` - see `initDomain()`'s own inline comment for the full behavioral
 //     consequence (an array `domain` is used directly as the value list; the `null` default
 //     collapses to a degenerate `[0, 0]` domain rather than crashing).
-//  3. **`top()`/`bottom()`/`left()`/`right()` each call `this.axisLine({...})` as their very first
-//     statement - a method never defined ANYWHERE in the whole engine** (see the extend-chain
-//     section above) - `TypeError: this.axisLine is not a function` on every real invocation. In
-//     practice this is doubly unreachable via a genuine `render()` call (bugs 1 and 2 above both
-//     throw first), but `top`/`bottom`/`left`/`right` remain independently, directly callable/
-//     testable (same convention `grid/overlap.ts`'s `custom()`/`grid/table.ts`'s `custom()` already
-//     use for their own independently-broken, real-render-unreachable methods), and independently
-//     broken on their own terms.
-// Net effect: a `RuleGrid`, as literally written in the real original engine, can never
-// successfully render through ANY orient - not fixed here, preserved faithfully throughout, each
-// bug reproduced at its own exact call site and covered by its own direct (non-`render()`-path)
-// test in `rule.spec.ts`.
+//  3. **FIXED - `top()`/`bottom()`/`left()`/`right()` each call `this.axisLine({...})` as their very
+//     first statement - a method never defined ANYWHERE in the whole engine** (see the extend-chain
+//     section above) - used to throw `TypeError: this.axisLine is not a function` on every real
+//     invocation, independently of bugs 1 and 2 above (which both used to throw first via a real
+//     `render()` call, but `top`/`bottom`/`left`/`right` remain independently, directly callable/
+//     testable too - same convention `grid/overlap.ts`'s `custom()`/`grid/table.ts`'s `custom()`
+//     already use). Fixed by implementing `axisLine()` as a genuine new method - see its own doc
+//     comment below for the full reasoning.
+// Net effect: all three Tier A bugs above are now fixed, and a default-configured `RuleGrid` can
+// render through any orient without crashing - each bug's fix covered by its own red→green test in
+// `rule.spec.ts`. The remaining, previously-documented Tier B quirks below (non-decimal-safe domain
+// snapping, the missing `.clamp()` call, and the in-place `this.grid.max`/`.min` mutation) are
+// deliberately left untouched - see each one's own inline comment.
 //
 // ============================================================================================
 // `initDomain()` - closely resembles `RangeGrid.initDomain()`, but is NOT a shared/inherited
@@ -137,8 +140,8 @@
 // delegating to `CoreGrid.drawTop()`/`.drawBottom()`/`.drawLeft()`/`.drawRight()` at all (unlike
 // every other concrete grid ported so far) - confirmed by reading the original in full: it builds
 // its own per-tick `<g>` groups directly via `this.chart.svg.group()`/`.translate()`/`.append()`,
-// with its own axis-reference-line (`this.axisLine(...)`, permanently broken - see above) plus a
-// small tick mark (`this.line(...)`, `CoreGrid`'s own themed-line helper - this one DOES exist)
+// with its own axis-reference-line (`this.axisLine(...)`, now a real fixed method - see above) plus
+// a small tick mark (`this.line(...)`, `CoreGrid`'s own themed-line helper - this one DOES exist)
 // and optional text label per tick (skipped for the "0" tick when `this.hideZero` is set). Has
 // ZERO dependency on the `grid/draw2d.ts`/`grid/draw3d.ts` mixin (`createGridX`/`createGridY`/
 // `drawImage`/`drawValueText` are never referenced) - matching `grid/radar.ts`'s own already-
@@ -217,18 +220,33 @@ export class RuleGrid extends CoreGrid {
   hideZero!: boolean;
   center!: boolean;
 
-  /** PRESERVED BUG (severe, previously undocumented - see header comment's extend-chain
-   * section): never defined by ANYTHING in the whole engine, not `CoreGrid`, not
-   * `grid/draw2d.ts`'s or `grid/draw3d.ts`'s real mixins either (both define a similarly-named
-   * but differently-shaped `drawAxisLine` instead). Deliberately left unassigned here too - calling
-   * any of `top`/`bottom`/`left`/`right` throws the same `TypeError: this.axisLine is not a
-   * function` the original does, faithfully, not a mixin-pending placeholder like `CoreGrid`'s own
-   * `createGridX!`/`drawImage!` fields (which really do get assigned once `registerGridDraw2D`
-   * /`registerGridDraw3D` run - this one never does, by anything, ever). */
-  axisLine!: (attr: Record<string, unknown>) => TransElement;
+  /** FIXED (was a severe, previously undocumented PRESERVED BUG - see header comment's
+   * extend-chain section): `axisLine` was never defined by ANYTHING in the whole original engine -
+   * not `CoreGrid`, not `grid/draw2d.ts`'s or `grid/draw3d.ts`'s real mixins either (both define a
+   * similarly-named but differently-shaped `drawAxisLine` instead, never mixed into this class at
+   * all - see header comment). Unlike `CoreGrid`'s own `createGridX!`/`drawImage!` fields (real
+   * mixin-pending placeholders, assigned once `registerGridDraw2D`/`registerGridDraw3D` run), this
+   * one could never be aliased to an existing method - no candidate of this shape exists anywhere
+   * else in the engine - so it's implemented here as a genuine new method instead. Modeled on this
+   * same file's own tick-mark line styling below (`this.color("gridAxisBorderColor")`/
+   * `this.chart.theme("gridBorderWidth")`) rather than `grid/draw2d.ts`'s `gridXAxisBorderColor`/
+   * `gridYAxisBorderColor` split (a theme key pair this file never otherwise references, since it
+   * bypasses that mixin entirely - see the `top`/`bottom`/`left`/`right` header comment section),
+   * built directly via `this.chart.svg.line(...)`, the same primitive `CoreGrid.line()` itself
+   * uses, merging the caller's full `{x1,y1,x2,y2}` attr over these themed defaults. */
+  axisLine(attr: Record<string, unknown>): TransElement {
+    return this.chart.svg.line({
+      x1: 0,
+      y1: 0,
+      x2: 0,
+      y2: 0,
+      stroke: this.color("gridAxisBorderColor"),
+      "stroke-width": this.chart.theme("gridBorderWidth"),
+      ...attr,
+    });
+  }
 
-  /** Draws the top-oriented reference axis line (via the permanently-broken `this.axisLine(...)`
-   * - see header comment's extend-chain section and the `axisLine!` field doc above) plus one tick
+  /** Draws the top-oriented reference axis line (via `this.axisLine(...)` above) plus one tick
    * mark + optional label per resolved value, entirely via its own `this.chart.svg.group()`/
    * `.translate()`/`.append()` calls - NOT delegating to `CoreGrid.drawTop()` the way every other
    * concrete grid does (see header comment). Independently callable/testable, but never reached via

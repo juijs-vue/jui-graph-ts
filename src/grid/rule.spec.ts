@@ -145,20 +145,17 @@ describe("RuleGrid", () => {
     });
   });
 
-  describe("PRESERVED BUG 3 (severe): this.axisLine(...) is never defined ANYWHERE in the whole engine - top/bottom/left/right each throw TypeError on their first statement", () => {
-    it("top() throws TypeError: this.axisLine is not a function", () => {
+  describe("FIXED (was PRESERVED BUG 3, severe): this.axisLine(...) used to be never defined ANYWHERE in the whole engine - top/bottom/left/right each used to throw TypeError on their first statement", () => {
+    it("axisLine() is now a real method: returns a themed <line> merging the given attr over the defaults", () => {
       const { g } = makeRuleGrid();
-      g.ticks = [];
-      g.values = [];
-      g.bar = 6;
-      g.start = 0;
-      g.end = 100;
-      const group = g.chart.svg.group();
+      const el = g.axisLine({ x1: 0, x2: 400, y1: 0, y2: 0 });
 
-      expect(() => g.top(group)).toThrow(TypeError);
+      expect(el.attr("x2")).toBe(400);
+      expect(el.attr("stroke")).toBe("theme(gridAxisBorderColor)");
+      expect(el.attr("stroke-width")).toBe("theme(gridBorderWidth)");
     });
 
-    it("bottom()/left()/right() are independently broken the same way", () => {
+    it("top() no longer throws - axisLine() has a real implementation now", () => {
       const { g } = makeRuleGrid();
       g.ticks = [];
       g.values = [];
@@ -167,9 +164,22 @@ describe("RuleGrid", () => {
       g.end = 100;
       const group = g.chart.svg.group();
 
-      expect(() => g.bottom(group)).toThrow(TypeError);
-      expect(() => g.left(group)).toThrow(TypeError);
-      expect(() => g.right(group)).toThrow(TypeError);
+      expect(() => g.top(group)).not.toThrow();
+      expect(group.children.length).toBe(1); // just the axis line, no ticks
+    });
+
+    it("bottom()/left()/right() are independently fixed the same way", () => {
+      const { g } = makeRuleGrid();
+      g.ticks = [];
+      g.values = [];
+      g.bar = 6;
+      g.start = 0;
+      g.end = 100;
+      const group = g.chart.svg.group();
+
+      expect(() => g.bottom(group)).not.toThrow();
+      expect(() => g.left(group)).not.toThrow();
+      expect(() => g.right(group)).not.toThrow();
     });
 
     it("assigning axisLine directly (bypassing the permanent upstream gap) lets top() render ticks - proves the geometry loop itself is otherwise correct/reachable", () => {
