@@ -43,22 +43,24 @@
 // throw and produces the expected ticks).
 //
 // ============================================================================================
-// Preserved bugs/quirks found and documented (Node/hand-verified against the literal original,
-// not merely inferred from a single read) - `initDomain()`'s value-list construction
+// Bugs/quirks found and documented (Node/hand-verified against the literal original, not merely
+// inferred from a single read) - `initDomain()`'s value-list construction
 // ============================================================================================
-//  1. **The string-domain branch's per-item array handling is genuinely buggy, unlike the
-//     sibling function-domain branch**: for a string `grid.domain` (a field name), each data
-//     row's field value may itself be an array (e.g. a [min,max] range per row). The STRING
-//     branch computes `Math.max(value)`/`Math.min(value)` - calling `Math.max`/`Math.min` on the
-//     ARRAY DIRECTLY, with no `.apply`/spread. `Math.max([1,2,3])` coerces the array via
-//     `ToNumber` (`Number([1,2,3])` is `NaN` for any array with more than one element - only a
-//     single-element array like `[5]` coerces successfully, to `5`) - so this branch produces
-//     `NaN` for any real multi-element per-row array. The FUNCTION-domain branch (a few lines
-//     below, same file) computes the exact same thing correctly, via `Math.max.apply(Math,
-//     value)`/`Math.min.apply(Math, value)`. Confirmed by directly comparing both branches in the
-//     literal original source, not obvious from reading either branch alone. Preserved exactly
-//     (not fixed), tested in `range.spec.ts` (both the single-element-array "accidentally works"
-//     case and the multi-element-array NaN case).
+//  1. **FIXED (Tier A crash/data-corruption defect)**: the string-domain branch's per-item array
+//     handling used to be genuinely buggy, unlike the sibling function-domain branch: for a
+//     string `grid.domain` (a field name), each data row's field value may itself be an array
+//     (e.g. a [min,max] range per row). The STRING branch computed `Math.max(value)`/
+//     `Math.min(value)` - calling `Math.max`/`Math.min` on the ARRAY DIRECTLY, with no
+//     `.apply`/spread. `Math.max([1,2,3])` coerces the array via `ToNumber` (`Number([1,2,3])`
+//     is `NaN` for any array with more than one element - only a single-element array like `[5]`
+//     coerced successfully, to `5`) - so this branch produced `NaN` for any real multi-element
+//     per-row array, poisoning `unit`/`domain.step` and collapsing the domain to `[0, 0]`. The
+//     FUNCTION-domain branch (a few lines below, same file) already computed the exact same thing
+//     correctly, via `Math.max.apply(Math, value)`/`Math.min.apply(Math, value)` - the string
+//     branch now matches it. Confirmed present in the real legacy source too (`juijs/jui-graph`'s
+//     own `src/grid/range.js`), not a porting mistake. Tested in `range.spec.ts` (both the
+//     single-element-array "accidentally worked even before the fix" case and the multi-element-
+//     array case that used to be NaN).
 //  2. **The string-domain branch pushes an extra `0` onto `value_list` for EVERY non-array row**
 //     (unconditional `value_list.push(0)` in its `else` branch), while the function-domain branch
 //     only pushes `0` ONCE total, guarded by an `isCheck` flag. Both branches exist to ensure `0`
@@ -261,11 +263,12 @@ export class RangeGrid extends CoreGrid {
         const value = data[index][field]
 
         if (Array.isArray(value)) {
-          // PRESERVED BUG (see header comment 1): no `.apply`/spread - `Math.max`/`Math.min`
-          // coerce the array directly via `ToNumber`, which is `NaN` for any array with more
-          // than one element.
-          value_list[index] = Math.max(value as unknown as number)
-          value_list.push(Math.min(value as unknown as number))
+          // FIXED (Tier A - was PRESERVED BUG, see header comment 1): used to call `Math.max`/
+          // `Math.min` directly on the array with no `.apply`/spread, which `ToNumber`-coerces
+          // to `NaN` for any array with more than one element, poisoning `unit`/`domain.step` and
+          // collapsing the domain to `[0, 0]`. Now matches the function-domain branch below.
+          value_list[index] = Math.max.apply(Math, value)
+          value_list.push(Math.min.apply(Math, value))
         } else {
           value_list[index] = value as number
           // PRESERVED QUIRK (see header comment 2): unconditional, unlike the function-domain

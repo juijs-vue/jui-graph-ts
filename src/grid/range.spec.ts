@@ -179,9 +179,9 @@ describe('RangeGrid', () => {
   })
 
   describe(
-    'initDomain - string domain, PRESERVED BUGS: (1) Math.max/min called directly on a per-row ' +
+    'initDomain - string domain: (1) FIXED - Math.max/min used to be called directly on a per-row ' +
       'array value (no .apply/spread - NaN for multi-element arrays), unlike the function-domain ' +
-      "branch; (2) pushes an extra 0 for EVERY non-array row, not just once",
+      "branch; (2) PRESERVED QUIRK - still pushes an extra 0 for EVERY non-array row, not just once",
     () => {
       it('single-element array field value: Math.max([5])/Math.min([5]) happen to coerce correctly (both 5)', () => {
         const g = makeRangeGrid()
@@ -197,17 +197,16 @@ describe('RangeGrid', () => {
       })
 
       it(
-        'multi-element array field value: Math.max([1,2,3])/Math.min(...) are NaN - poisons `unit`/`domain.step`, ' +
-          'but the while-loop boundary comparisons against NaN are always false, so domain itself lands on [0,0] ' +
-          '(Node-verified - the NaN surfaces in `.step`, not in the array elements themselves)',
+        'multi-element array field value: Math.max.apply/.min.apply resolve correctly (bug fix - ' +
+          'used to be NaN via Math.max([1,2,3]) coercing the whole array, collapsing the domain to [0,0])',
         () => {
           const g = makeRangeGrid()
           g.axis = makeAxisStub({ data: [{ f: [1, 2, 3] }] })
           g.grid = makeGrid({ domain: 'f', step: 10 }) as any
 
           const domain = g.initDomain()
-          expect(Array.from(domain)).toEqual([0, 0])
-          expect(Number.isNaN(domain.step)).toBe(true)
+          expect(Number.isNaN(domain.step)).toBe(false)
+          expect(Array.from(domain)).not.toEqual([0, 0])
         },
       )
 
