@@ -29,6 +29,21 @@
 // `axisLine()` method rather than aliasing it to either differently-shaped `drawAxisLine` - see the
 // method itself and `top()`/`bottom()`/`left()`/`right()` below.
 //
+// RE-VERIFIED directly against the actual upstream source once it became available (cloned to
+// `jui-graph/src/grid/rule.js`, plus its own built `dist/jui-graph.min.js`, not just inferred from
+// sibling files): `draw()`'s `this.drawGrid(chart, orient, "rule", grid)`, `initDomain()`'s else
+// branch's `value_list = grid.domain;`, and the string-domain branch's bare `Math.max(value)`/
+// `Math.min(value)` are all BYTE-IDENTICAL to what this file already had transcribed - no surprises
+// there. `axisLine` specifically: grepped the whole cloned `jui-graph` repo (not just `rule.js`,
+// not just `src/`) AND the separately-deployed `www.jui.io/lib/jui/js/chart.js` bundle for any
+// `axisLine =`/`axisLine :`/`axisLine=function` assignment - genuinely zero results in either, only
+// the 4 call sites in `rule.js` (`top`/`bottom`/`left`/`right`) and `draw3d.js`'s unrelated
+// `@method axisLine` doc-comment label. Confirms this was a real, permanent gap in the shipped
+// production engine too - `RuleGrid` never rendered successfully for ANY real user, ever, so there
+// is no "true" original visual behavior to preserve here, only the calling code's own clear intent
+// (a straight reference line spanning `this.start`..`this.end`, themed the same way this file's own
+// tick marks already are) - which is exactly what the new `axisLine()` method below implements.
+//
 // ============================================================================================
 // `RuleGrid` WAS a genuinely, severely, MULTIPLY broken class in the real original engine - three
 // independent, previously-undocumented bugs "layered" on top of each other (same "onion" category
