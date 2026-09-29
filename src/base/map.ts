@@ -162,25 +162,31 @@ function extend(origin: unknown, add: unknown, skip?: boolean): Record<string, u
 /**
  * `_.trim(text)` ported from `util/base.js`.
  *
- * FIX (Tier A defect B, previously a genuine, previously-undocumented bug - Node-cross-checked
- * against the literal original, not assumed from reading the regex once): the regex itself is a
- * well-known pattern (Sizzle's own selector-trimming `rtrim`) whose trailing alternative
- * (`((?:^|[^\\])(?:\\.)*)` + whitespace + `"$"`) deliberately captures the one non-whitespace
- * character immediately before a trailing whitespace run into group 1, specifically so a caller
- * can restore it via `.replace(rtrim, "$1")` - that's what makes the "avoid trimming an escaped
- * trailing space" logic work at all. This port's `.replace(rtrim, "")` (no replacement group) was
- * a transcription bug: it deleted the ENTIRE match - captured character included - not just the
+ * FIX (Tier A defect B): this is a genuine bug in the REAL upstream original, not a port
+ * transcription error - directly confirmed against the actual legacy source
+ * (`jui-graph/src/base/base.js`'s own `trim: function(text) {...}`, line ~570-577): its own
+ * `rtrim` regex is byte-identical to this file's, and its own replace call is LITERALLY
+ * `(text + "").replace(rtrim, "")` - the same bare `""` this port originally (faithfully)
+ * reproduced. The regex itself is a well-known pattern (Sizzle's own selector-trimming `rtrim`)
+ * whose trailing alternative (`((?:^|[^\\])(?:\\.)*)` + whitespace + `"$"`) deliberately captures
+ * the one non-whitespace character immediately before a trailing whitespace run into group 1 -
+ * every other real-world use of this exact regex pairs it with `.replace(rtrim, "$1")` to restore
+ * that captured character, which is what makes the "avoid trimming an escaped trailing space"
+ * logic work at all. The genuine original library's own `.replace(rtrim, "")` (no replacement
+ * group) instead deletes the ENTIRE match - captured character included - not just the
  * trailing-whitespace portion, so any string with trailing/delimiter-adjacent whitespace silently
- * lost its last real character (e.g. `trim("blue ")` -> `"blu"`, `trim("0.5 ")` -> `"0."`,
+ * loses its last real character (e.g. `trim("blue ")` -> `"blu"`, `trim("0.5 ")` -> `"0."`,
  * `trim("ab  ")` -> `"a"` even across a multi-space run, `trim("a ")` -> `""`). `getStyleObj()`
  * below feeds every parsed style value/key through this, corrupting any real `style="..."` CSS
  * value authored with a space before a `:`/`;` delimiter (or a trailing space at the end) - a Tier
  * A defect (silent data corruption of real CSS colors/values), not a "look" any real demo could
- * depend on, so fixed here (not preserved): the fix is simply the corrected substitution,
- * `.replace(rtrim, "$1")`, restoring the character the regex captures for exactly that purpose -
- * leading whitespace (matched by the OTHER alternative, no capture group) still strips to `""` as
- * before, and a string with no trailing whitespace at all is still untouched. See `map.spec.ts`'s
- * `getStyleObj`/`loadArray` regression coverage.
+ * depend on, so it's fixed here, deliberately DIVERGING from the real upstream original (unlike
+ * this project's usual "preserve, don't fix" rule) - the fix is simply the corrected substitution,
+ * `.replace(rtrim, "$1")`, restoring the character the regex's own capturing group exists
+ * specifically to protect. Leading whitespace (matched by the OTHER alternative, which has no
+ * capture group) still strips to `""` exactly as before, and a string with no trailing whitespace
+ * at all is still left untouched. See `map.spec.ts`'s `getStyleObj`/`loadArray` regression
+ * coverage.
  */
 function trim(text: unknown): string {
   const whitespace = "[\\x20\\t\\r\\n\\f]";
