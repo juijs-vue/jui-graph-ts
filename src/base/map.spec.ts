@@ -100,7 +100,7 @@ function makeMap(chart: MapChart, axis: Axis, mapOverrides: Partial<MapOptions> 
 /** Minimal fake XHR - synchronously "completes" inside `.send()`, matching `ajax()`'s
  *  `async: false` contract (it reads `xhr.readyState`/`.status` right after `.send()` returns). */
 class FakeXHR {
-  static responses: Record<string, { status: number; svg: string }> = {};
+  static responses: Record<string, { status: number; svg?: string; nullXML?: boolean }> = {};
   static sendCount = 0;
 
   readyState = 0;
@@ -117,7 +117,9 @@ class FakeXHR {
     FakeXHR.sendCount++;
     const entry = FakeXHR.responses[this._url] || { status: 200, svg: '<svg xmlns="http://www.w3.org/2000/svg"></svg>' };
 
-    this.responseXML = new DOMParser().parseFromString(entry.svg, "image/svg+xml");
+    // `nullXML: true` simulates a real server response the browser doesn't recognize as XML (e.g.
+    // no/wrong `Content-Type`) - `xhr.responseXML` stays `null` even on a 200 status.
+    this.responseXML = entry.nullXML ? null : new DOMParser().parseFromString(entry.svg as string, "image/svg+xml");
     this.readyState = 4;
     this.status = entry.status;
   }
@@ -528,6 +530,30 @@ describe("loadPath", () => {
     FakeXHR.responses["missing.svg"] = { status: 404, svg: "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>" };
 
     expect(() => map.loadPath("missing.svg")).toThrow("JUI_CRITICAL_ERR: Failed to load resource");
+  });
+
+  it("FIX (Tier A defect D - was: a null responseXML crashed with an uncaught TypeError deep " +
+    "inside the success callback): a response whose responseXML is null surfaces a clear, " +
+    "catchable error instead of throwing an uncaught TypeError, and doesn't poison the cache", () => {
+    const { chart } = makeChart();
+    const axis = makeAxis(chart);
+    const map = makeMap(chart, axis) as any;
+    vi.stubGlobal("XMLHttpRequest", FakeXHR);
+
+    FakeXHR.responses["null-xml.svg"] = { status: 200, nullXML: true };
+
+    expect(() => map.loadPath("null-xml.svg")).not.toThrow(TypeError);
+    expect(() => map.loadPath("null-xml.svg")).toThrow(/JUI_CRITICAL_ERR/);
+    // No permanent `[]` poisoning the cache either - same non-poisoning guarantee as defect C.
+    expect(Array.isArray(map.pathData["null-xml.svg"])).toBe(false);
+
+    // A later call with a real, well-formed response still succeeds (no permanent damage done).
+    FakeXHR.responses["null-xml.svg"] = {
+      status: 200,
+      svg: '<svg xmlns="http://www.w3.org/2000/svg"><g id="g1"><path id="p1" d="M0 0"/></g></svg>',
+    };
+    const result = map.loadPath("null-xml.svg");
+    expect(result).toHaveLength(1);
   });
 });
 

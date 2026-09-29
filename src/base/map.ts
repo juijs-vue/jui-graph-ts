@@ -573,10 +573,15 @@ export class Map {
    * (fetch malformed once, fix the response, confirm a second real network request happens and
    * succeeds).
    *
-   * **Preserved quirk**: if `xhr.responseXML` is `null` (e.g. the server didn't send a
-   * `Content-Type` XHR recognizes as XML), `xml.getElementsByTagName(...)` throws a `TypeError`
-   * uncaught inside the `success` callback - no defensive null-check, matching the original. (See
-   * Tier A defect D, fixed separately.)
+   * FIX (Tier A defect D, previously preserved as a quirk - now closed): if `xhr.responseXML` was
+   * `null` (e.g. the server didn't send a `Content-Type` XHR recognizes as XML),
+   * `xml.getElementsByTagName(...)` used to throw an uncaught `TypeError` deep inside the
+   * `success` callback - no defensive null-check. A guaranteed crash nobody could depend on -
+   * fixed here by surfacing the same kind of explicit, catchable `JUI_CRITICAL_ERR` error the
+   * `fail` callback already throws for a non-200 response, instead of an opaque uncaught
+   * `TypeError` - consistent with how this function already signals "the fetch didn't give us
+   * usable data," and (like defect C's fix) without writing a permanent `[]` into the cache. See
+   * `map.spec.ts`'s dedicated regression test.
    */
   private loadPath(uri: string): { path: SvgElement; data: MapPathDatum }[] {
     if (typeCheck("array", this.pathData[uri])) {
@@ -589,7 +594,12 @@ export class Map {
       url: uri,
       async: false,
       success: (xhr) => {
-        const xml = xhr.responseXML as Document;
+        const xml = xhr.responseXML;
+
+        if (xml == null) {
+          throw new Error("JUI_CRITICAL_ERR: Failed to load resource (responseXML was null - the response wasn't recognized as XML)");
+        }
+
         const svgTags = xml.getElementsByTagName("svg");
         const styleTags = xml.getElementsByTagName("style");
 
