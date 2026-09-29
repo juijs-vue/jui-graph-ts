@@ -44,9 +44,16 @@ export class TransElement extends Element {
 
   /**
    * `rotate(angle)` (single arg) or `rotate(angle, x, y)` (three args) are the two documented
-   * forms. **Preserved bug**: any OTHER argument count (e.g. `rotate(angle, x)`, two args) falls
-   * through both branches, leaving the interpolated value `undefined` - producing the literal
-   * string `"rotate(undefined)"` rather than throwing or ignoring the call.
+   * forms. **Fixed (Tier A - data-corrupting defect)**: any OTHER argument count (e.g.
+   * `rotate(angle, x)`, two args) used to fall through both branches, leaving the interpolated
+   * value `undefined` - producing the literal string `"rotate(undefined)"`, which got pushed
+   * into the composed `transform` attribute and made the ENTIRE attribute invalid (SVG discards a
+   * `transform` list containing any unparseable component), silently breaking every OTHER
+   * already-set transform component (`translate`/`scale`/`skew`/`matrix`) too. No plausible demo
+   * could depend on an unsupported arg count producing a broken `transform` attribute, so an
+   * unsupported argument count is now a no-op: the call is ignored and any previously-set
+   * `rotate(...)` (and every other transform component) is left untouched instead of being
+   * corrupted.
    */
   rotate(...args: unknown[]): this {
     let str: unknown;
@@ -55,6 +62,8 @@ export class TransElement extends Element {
       str = args[0];
     } else if (args.length === 3) {
       str = args[0] + " " + args[1] + "," + args[2];
+    } else {
+      return this;
     }
 
     this.transformOrders.rotate = "rotate(" + str + ")";

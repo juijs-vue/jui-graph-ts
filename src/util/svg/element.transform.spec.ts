@@ -53,10 +53,31 @@ describe("TransElement", () => {
             expect(el.element.getAttribute("transform")).toBe("rotate(45 10,20)");
         });
 
-        it("preserved bug: 2-arg form produces the literal string rotate(undefined)", () => {
+        it("fixed: unsupported arg count no longer corrupts the transform attribute", () => {
             const el = makeTrans();
-            (el.rotate as any)(45, 10);
-            expect(el.element.getAttribute("transform")).toBe("rotate(undefined)");
+            el.translate(1, 2);
+            (el.rotate as any)(45, 10); // unsupported 2-arg form
+
+            const transform = el.element.getAttribute("transform")!;
+            expect(transform).not.toContain("undefined");
+            // The already-set translate() component must survive intact.
+            expect(transform).toContain("translate(1,2)");
+        });
+
+        it("fixed: unsupported arg count (0 args) does not corrupt the transform attribute", () => {
+            const el = makeTrans();
+            (el.rotate as any)();
+            expect(el.element.getAttribute("transform") || "").not.toContain("undefined");
+        });
+
+        it("fixed: unsupported arg count (4+ args) does not corrupt the transform attribute", () => {
+            const el = makeTrans();
+            el.scale(2, 2);
+            (el.rotate as any)(1, 2, 3, 4);
+
+            const transform = el.element.getAttribute("transform")!;
+            expect(transform).not.toContain("undefined");
+            expect(transform).toContain("scale(2,2)");
         });
     });
 
