@@ -156,15 +156,31 @@ describe("Map.setup", () => {
 // The headline finding: no render()
 // =================================================================================================
 
-describe("Map render() lifecycle (preserved upstream defect)", () => {
-  it("never defines a render() method - only draw()/drawAfter() - matching the original 1:1", () => {
+describe("Map.render() (Tier-A fix: bridges draw()/drawAfter(), matching the MapInstance.render() contract)", () => {
+  it("calls draw() then drawAfter() (with draw()'s result) and returns that same result, without throwing", () => {
     const { chart } = makeChart();
     const axis = makeAxis(chart);
-    const map = makeMap(chart, axis);
+    const map = makeMap(chart, axis, { path: "m1" });
+    (map as any).pathData["m1"] = [{ id: "a", d: "M0 0" }];
 
-    expect(typeof map.draw).toBe("function");
-    expect(typeof map.drawAfter).toBe("function");
-    expect((map as unknown as { render?: unknown }).render).toBeUndefined();
+    const drawSpy = vi.spyOn(map, "draw");
+    const drawAfterSpy = vi.spyOn(map, "drawAfter");
+
+    let result!: { root: TransElement; scale: MapScale };
+    expect(() => {
+      result = map.render();
+    }).not.toThrow();
+
+    expect(drawSpy).toHaveBeenCalledTimes(1);
+    expect(drawAfterSpy).toHaveBeenCalledTimes(1);
+    expect(drawAfterSpy).toHaveBeenCalledWith(result);
+
+    // draw()'s own effect: a real TransElement root wrapping the loaded path group.
+    expect(result.root).toBeInstanceOf(TransElement);
+    expect(result.scale).toBe(map.scale);
+    // drawAfter()'s own effect actually occurred (not just "was called"): the clip-path attribute
+    // it sets is present on the returned root.
+    expect(result.root.attributes["clip-path"]).toBe("url(#" + axis.get("clipRectId") + ")");
   });
 });
 

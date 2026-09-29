@@ -11,8 +11,10 @@
 // see `map.spec.ts`).
 //
 // ================================================================================================
-// THE HEADLINE FINDING: `chart.map`'s `render()` lifecycle contract is broken in the real,
-// distributed upstream library - not a port-introduced bug.
+// THE HEADLINE FINDING (Tier-A defect, FIXED - see `render()`'s own doc comment below): `chart.map`'s
+// `render()` lifecycle contract was broken in the real, distributed upstream library, not a
+// port-introduced bug - and, unlike this file's other preserved quirks, this one is a guaranteed
+// crash nobody could ever have depended on, so it's fixed here rather than preserved.
 // ================================================================================================
 // `base/axis.js`'s `drawMapType()` (this project's `axis.ts` `Axis.drawMapType()`, already landed)
 // constructs a map instance and then calls `map.render()` directly:
@@ -30,21 +32,25 @@
 // `Map`'s own two methods clearly were designed to plug into, going by their names/shapes, but
 // `Map` never actually declares `extend: "draw"` to get it). Net effect, verified against the
 // literal original and its own compiled output, not assumed from a single read: **calling
-// `axis.js`'s map-axis code path in the real, shipped `juijs-graph`/`jui-chart` always throws
-// `TypeError: map.render is not a function` the instant any chart configures a `map` axis option**
-// - `chart.map`'s entire declared purpose is unreachable dead code in production. This is preserved
-// exactly here (per Phase 0 rule 6: document, don't fix) - `Map` below still defines only `draw()`/
-// `drawAfter()`, no `render()`. See `map.spec.ts`'s dedicated regression test.
+// `axis.js`'s map-axis code path in the real, shipped `juijs-graph`/`jui-chart` always threw
+// `TypeError: map.render is not a function` the instant any chart configured a `map` axis option**
+// - `chart.map`'s entire declared purpose was unreachable dead code in production.
 //
-// A direct, practical consequence: this port's own `base/axis.ts` defines a `MapConstructor`/
-// `MapInstance` structural contract (`AxisChart.mapType`) requiring a `render(): {root, scale}`
-// method, modeled on what `drawMapType()` itself calls - exactly reproducing the upstream defect
-// means `Map` (as ported here) does NOT implement that contract (no `render()`), so it is NOT
-// wired in as `AxisChart.mapType` anywhere, and does not literally `implements MapInstance`.
-// Whatever eventually wires a real map brush/widget up in Phase E would need its own explicit
-// adapter bridging `render()` to `draw()`+`drawAfter()` (mirroring what `chart.draw`'s `Draw.render()`
-// does) - deliberately NOT added here, since doing so would silently "fix" the very bug this port's
-// job is to preserve and document.
+// FIX (Tier A: outright crash, not a "look" any real demo could depend on): `Map` below now defines
+// its own `render()`, bridging `draw()`/`drawAfter()` exactly the way `chart.draw`'s `Draw.render()`
+// does for a real `extend: "draw"` subclass (see `render()`'s own doc comment for the exact shape).
+// This closes the direct, practical consequence the port's own `base/axis.ts` already flagged: that
+// file's `MapConstructor`/`MapInstance` structural contract (`AxisChart.mapType`) requires a
+// `render(): {root, scale}` method, modeled on what `drawMapType()` itself calls - `Map` now
+// actually implements that contract (see `map.spec.ts`'s `Map.render()` describe block), so
+// `jui-chart-vue`'s `register/mapTypes.ts` can wire it in as a real `AxisChart.mapType` for the
+// first time. (Separately, `jui-chart-vue` had already found and worked around a SECOND, unrelated
+// `base/axis.ts` defect - out of this file's scope, in a file this project doesn't touch - that
+// still keeps `new MapCtor(...)` itself from ever running in that project's current architecture;
+// see that project's own `register/chartMap.ts` header comment for the full writeup. This fix is
+// still correct and necessary in its own right: it's what makes `Map` structurally satisfy
+// `MapInstance` at all, and it's exactly what that project's own workaround delegates to
+// internally.)
 //
 // ================================================================================================
 // Other structural notes
@@ -57,11 +63,12 @@
 //   the four direct property assignments `axis.js` performs immediately after `new Map(...)`, not
 //   via the constructor. Preserved exactly: this class's constructor also takes no parameters and
 //   ignores anything passed to it (TypeScript's structural function-type compatibility allows a
-//   0-parameter constructor to satisfy a 3-parameter constructor type, so this remains fine even
-//   for `MapConstructor`'s shape, moot anyway since `Map` can't satisfy `MapConstructor` at all per
-//   the missing-`render()` finding above). `chart`/`axis`/`map`/`svg` are typed with definite-
-//   assignment assertions (`!`), same idiom `util/svg/element.ts`'s `Element` already established
-//   for "populated by an external wiring step, not the constructor."
+//   0-parameter constructor to satisfy a 3-parameter constructor type, so this remains fine for
+//   `MapConstructor`'s shape) - and now that `render()` is fixed (see the header comment's own
+//   "headline finding" update), `Map` genuinely, structurally satisfies `MapConstructor`/
+//   `MapInstance` end to end, arity quirk included. `chart`/`axis`/`map`/`svg` are typed with
+//   definite-assignment assertions (`!`), same idiom `util/svg/element.ts`'s `Element` already
+//   established for "populated by an external wiring step, not the constructor."
 // - **`chart` needs more than `axis.ts`'s `AxisChart` declares**: `addEvent()`'s `setMouseEvent()`
 //   reads `chart.root` (the real DOM mount element) and `chart.padding("left"/"top")` - neither is
 //   part of `axis.ts`'s `AxisChart` interface (`base/axis.js` itself never calls either; only real
@@ -809,6 +816,35 @@ export class Map {
         this.addEvent(entry.path, entry);
       });
     }, 1);
+  }
+
+  /**
+   * @method render
+   * FIX (Tier-A defect, previously this file's own headline finding - now closed; see the header
+   * comment for the full "why this was ever missing" history). `base/axis.ts`'s `drawMapType()` is
+   * the ONLY caller of a map instance's `render()` (it calls it unconditionally, immediately after
+   * construction), and `AxisChart.mapType`'s own `MapInstance` contract requires one - but this
+   * class, matching the real upstream `chart.map` exactly, never declared `extend: "draw"`, so it
+   * never inherited `chart.draw`'s `Draw.render()` (which bridges a real subclass's own `draw`/
+   * `drawBefore`/`drawAnimate`/`drawAfter` hooks - see `base/draw.ts`). Calling `.render()` on a
+   * real instance therefore always threw `TypeError: map.render is not a function` - a guaranteed
+   * crash the instant any consumer actually wires a working `AxisChart.mapType` up (as
+   * `jui-chart-vue`'s own `register/mapTypes.ts` now does). Not a "look" any real demo could ever
+   * have depended on (nothing could reach this far without crashing first), so this is Tier A:
+   * fixed here, not preserved.
+   *
+   * The fix mirrors exactly what `Draw.render()` does for a real `extend: "draw"` subclass, scoped
+   * to only the two hooks `Map` actually implements (it has no `drawBefore`/`drawAnimate` of its
+   * own, unlike a real `chart.grid.*`/`chart.brush.*`/`chart.widget.*` leaf type, so those two
+   * `Draw.render()` steps have nothing to bridge here): call `draw()`, hand its result to
+   * `drawAfter()`, then return that same result - satisfying `MapInstance.render(): { root, scale
+   * }` exactly. See `map.spec.ts`'s `Map.render()` describe block for the regression test (asserts
+   * no throw, both hooks actually ran via their own observable side effects, not just spy calls).
+   */
+  render(): { root: TransElement; scale: MapScale } {
+    const obj = this.draw();
+    this.drawAfter(obj);
+    return obj;
   }
 
   /** Default option values, matching `Map.setup()` in the original. */
